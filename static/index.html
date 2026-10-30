@@ -1,0 +1,2383 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Gateway</title>
+<style>
+/*
+  Design system — "quiet editorial"
+  Paper #f6f2e9 / panel #fbf8f1 / ink #211f1a / rule #ddd5c4
+  Accent terracotta #b9552f · secondary olive #66744c
+  Display: Iowan Old Style / Palatino / Georgia (serif)
+  UI: Avenir Next / Segoe UI / Helvetica Neue (humanist sans)
+  Mono: SF Mono / Menlo / Consolas
+  Rhythm: 44px sections, hairline rules, numbered headings, 5-column ledger.
+  No gradients, no emoji, no rounded cards, no decorative shadows.
+*/
+:root {
+  color-scheme: light;
+  --paper: #f6f2e9;
+  --paper-2: #efe9dc;
+  --panel: #fbf8f1;
+  --ink: #211f1a;
+  --ink-2: #484337;
+  --muted: #7c7565;
+  --faint: #a39b89;
+  --rule: #ddd5c4;
+  --rule-strong: #c6bca7;
+  --accent: #b9552f;
+  --accent-ink: #94401f;
+  --olive: #66744c;
+  --ok: #5c7148;
+  --danger: #9d3f28;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman", Georgia, serif;
+  --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, sans-serif;
+  --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #1c1b18;
+  --paper-2: #24221e;
+  --panel: #211f1b;
+  --ink: #eee8da;
+  --ink-2: #d2cab9;
+  --muted: #9c9481;
+  --faint: #6f685a;
+  --rule: #37342c;
+  --rule-strong: #4a4539;
+  --accent: #d97754;
+  --accent-ink: #e89a7c;
+  --olive: #a3b184;
+  --ok: #a3b184;
+  --danger: #e08a6c;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .34;
+  background-image: radial-gradient(rgba(33, 31, 26, .07) .6px, transparent .6px);
+  background-size: 5px 5px;
+}
+[data-theme="dark"] body::before {
+  opacity: .16;
+  background-image: radial-gradient(rgba(238, 232, 218, .06) .6px, transparent .6px);
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+code { font-family: var(--mono); font-size: .92em; }
+html[lang="zh-CN"] h1 em { font-style: normal; }
+html[lang="zh-CN"] .ledger dt,
+html[lang="zh-CN"] th,
+html[lang="zh-CN"] .eyebrow,
+html[lang="zh-CN"] .tab,
+html[lang="zh-CN"] .btn,
+html[lang="zh-CN"] .textbtn,
+html[lang="zh-CN"] .meta,
+html[lang="zh-CN"] .route-strategy {
+  text-transform: none;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 44px 76px;
+}
+
+/* masthead */
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule-strong);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--paper);
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff8f2;
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1;
+}
+.wordmark {
+  display: block;
+  font-family: var(--serif);
+  font-size: 21px;
+  line-height: 1;
+  letter-spacing: -.015em;
+}
+.tagline {
+  display: block;
+  margin-top: 4px;
+  font-size: 8.5px;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.tabs { display: flex; gap: 24px; margin-left: 6px; }
+.tab {
+  background: none;
+  border: 0;
+  padding: 0 0 5px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  font-size: 8.5px;
+}
+.dot {
+  width: 5px;
+  height: 5px;
+  display: inline-block;
+  flex: 0 0 auto;
+  background: var(--faint);
+}
+.dot.ok { background: var(--ok); }
+.dot.err { background: var(--danger); }
+.textbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 9.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+.textbtn:hover { color: var(--accent); }
+.auto { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.auto input { width: 12px; height: 12px; accent-color: var(--accent); }
+
+/* lede */
+.lede {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 36px;
+  padding: 46px 0 26px;
+}
+.eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 9px;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow > span:first-child {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+h1 {
+  margin: 9px 0 10px;
+  font-family: var(--serif);
+  font-size: 58px;
+  font-weight: 400;
+  line-height: .96;
+  letter-spacing: -.03em;
+  text-wrap: balance;
+}
+h1 em {
+  font-size: .5em;
+  font-style: italic;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.lede-copy {
+  margin: 0;
+  max-width: 650px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+.range { display: flex; gap: 14px; padding-bottom: 7px; flex: 0 0 auto; }
+.range button {
+  background: none;
+  border: 0;
+  padding: 0 0 4px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--faint);
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+.range button:hover { color: var(--accent); }
+.range button.active { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* ledger */
+.ledger {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  margin: 0;
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.ledger-item { padding: 15px 18px 14px; border-right: 1px solid var(--rule); min-width: 0; }
+.ledger-item:last-child { border-right: 0; }
+.ledger dt {
+  font-size: 8.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ledger dd {
+  margin: 7px 0 0;
+  font-family: var(--serif);
+  font-size: 27px;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.ledger .sub {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* sections */
+.block { margin-top: 44px; }
+.block-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.block-head .meta { margin-left: auto; font-size: 9.5px; color: var(--faint); white-space: nowrap; }
+.block-head .actions { display: flex; gap: 7px; margin-left: 14px; }
+.block-head .actions.push { margin-left: auto; }
+.subhead {
+  margin: 0 0 7px;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 400;
+}
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; }
+.split2 { display: grid; grid-template-columns: 1.15fr .85fr; gap: 36px; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+th {
+  padding: 10px 9px 8px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 8.5px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+td {
+  padding: 9px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+tbody tr:hover { background: var(--paper-2); }
+.num { text-align: right; }
+th.num { text-align: right; }
+.name { font-weight: 600; }
+.mono { font-family: var(--mono); font-size: 10.5px; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.state-ok { color: var(--ok); }
+.state-bad { color: var(--danger); }
+.empty { padding: 25px 9px; text-align: center; color: var(--faint); font-size: 11px; }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.tag i { width: 4px; height: 4px; display: inline-block; background: currentColor; }
+.tag.openai { color: var(--accent); }
+.tag.anthropic { color: var(--olive); }
+.tag.responses { color: var(--ink-2); }
+.tag.stream { color: var(--faint); }
+.tag.est { color: var(--faint); }
+.health { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 9.5px; }
+
+/* chart */
+.chart-frame { display: grid; grid-template-columns: 46px 1fr; gap: 10px; padding-top: 17px; }
+.chart-yaxis {
+  position: relative;
+  height: 220px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: var(--faint);
+}
+.chart-yaxis span { position: absolute; right: 0; transform: translateY(50%); }
+.chart-plot { position: relative; height: 220px; border-bottom: 1px solid var(--rule-strong); }
+.gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--rule); }
+.bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.bar-col { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; min-width: 0; }
+.bar-col:hover .bar-stack { opacity: .65; }
+.bar-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 1px;
+  transition: height .25s ease;
+}
+.bar-out { width: 100%; background: var(--olive); }
+.bar-in { width: 100%; background: var(--accent); }
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  font-size: 11px;
+}
+.x-axis {
+  display: flex;
+  gap: 2px;
+  margin: 8px 0 0 56px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+}
+.x-axis span { flex: 1 1 0; text-align: center; white-space: nowrap; min-width: 0; }
+.legend { display: flex; gap: 15px; margin-left: auto; font-size: 9.5px; color: var(--muted); }
+.legend i { width: 8px; height: 8px; display: inline-block; margin-right: 5px; vertical-align: 0; }
+.legend .in { background: var(--accent); }
+.legend .out { background: var(--olive); }
+
+/* buttons */
+.btn {
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.btn:hover { background: var(--paper-2); border-color: var(--muted); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff8f2; }
+.btn.primary:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+.btn.small { padding: 5px 9px; font-size: 8.5px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:focus-visible, .tab:focus-visible, .range button:focus-visible, .textbtn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* config editor */
+.config-path { flex: 0 0 auto; text-align: right; font-size: 10px; color: var(--muted); }
+.config-path .label {
+  display: block;
+  font-size: 8.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 5px;
+}
+.config-path code { font-family: var(--mono); font-size: 10px; color: var(--ink-2); }
+.editor-shell { border: 1px solid var(--rule-strong); background: var(--panel); margin-top: 6px; }
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.file-meta { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 9.5px; }
+.dirty {
+  font-size: 8.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-bottom: 1px solid var(--accent);
+}
+.editor-toolbar .actions { display: flex; gap: 7px; margin-left: auto; }
+.editor-body { display: grid; grid-template-columns: 54px 1fr; height: 560px; }
+.gutter {
+  margin: 0;
+  padding: 16px 10px 16px 0;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--faint);
+  background: var(--paper-2);
+  border-right: 1px solid var(--rule);
+  overflow: hidden;
+  user-select: none;
+}
+#editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 16px 18px;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+#editor:focus { box-shadow: inset 0 0 0 1px var(--accent-ink); }
+.editor-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--rule);
+  font-size: 9.5px;
+  color: var(--faint);
+}
+.status-line { display: flex; align-items: center; gap: 7px; }
+.editor-status .meta { margin-left: auto; font-family: var(--mono); }
+.note {
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+.note.warn { color: var(--danger); }
+.note code { font-size: 10px; }
+
+/* routing */
+.route-group { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.route-group summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  cursor: pointer;
+  list-style: none;
+}
+.route-group summary::-webkit-details-marker { display: none; }
+.route-group summary::before {
+  content: "+";
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--faint);
+  width: 10px;
+}
+.route-group[open] summary::before { content: "−"; }
+.route-group[open] summary { margin-bottom: 9px; }
+.route-model { font-family: var(--serif); font-size: 18px; }
+.route-strategy {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  padding: 2px 6px;
+}
+.route-suggest {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 10px;
+  text-align: right;
+}
+.route-suggest .muted { color: var(--muted); }
+.route-group .table-wrap { overflow-x: auto; }
+.route-sub { display: block; margin-top: 2px; color: var(--faint); font-size: 9px; }
+.route-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+.route-foot .meta { flex: 1; font-size: 9.5px; color: var(--faint); }
+.route-foot b { font-weight: 500; color: var(--muted); font-family: var(--mono); }
+.route-pill {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-bottom: 1px solid var(--accent);
+}
+.preview .route-line { font-family: var(--mono); font-size: 9.5px; color: var(--faint); }
+
+/* preview */
+.preview { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; }
+.preview ul { list-style: none; margin: 0; padding: 0; }
+.preview li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 11.5px;
+}
+.preview li span:last-child { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+
+/* discovery */
+.discover-row { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+.discover-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.discover-head .name { font-size: 12px; }
+.discover-head .actions { margin-left: auto; display: flex; gap: 7px; }
+.discover-meta { color: var(--faint); font-size: 9.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.chip {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--accent);
+  border: 1px solid var(--rule-strong);
+  padding: 2px 6px;
+}
+.chip.configured { color: var(--faint); }
+.discover-error { color: var(--danger); font-size: 10px; }
+
+/* footer */
+footer {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 52px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  color: var(--faint);
+  font-size: 9px;
+  letter-spacing: .04em;
+  flex-wrap: wrap;
+}
+footer .mono { font-size: 9px; }
+footer .spacer { flex: 1; }
+
+/* modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 22, 18, .48);
+}
+[data-theme="dark"] .modal { background: rgba(0, 0, 0, .62); }
+.modal-box {
+  width: 390px;
+  max-width: calc(100vw - 36px);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  padding: 28px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .16);
+}
+.modal-box h2 { margin: 7px 0 8px; font-family: var(--serif); font-size: 27px; font-weight: 400; }
+.modal-box p { margin: 0 0 18px; color: var(--muted); font-size: 11.5px; line-height: 1.65; }
+.modal-box input {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: 0;
+}
+.modal-box input:focus { border-color: var(--accent); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 1080px) {
+  .ledger { grid-template-columns: repeat(3, 1fr); }
+  .ledger-item:nth-child(3) { border-right: 0; }
+  .ledger-item:nth-child(n+4) { border-top: 1px solid var(--rule); }
+  .split, .split2, .preview { grid-template-columns: 1fr; gap: 30px; }
+}
+@media (max-width: 760px) {
+  .shell { padding: 0 20px 56px; }
+  .masthead { flex-wrap: wrap; gap: 14px; padding-top: 18px; }
+  .tabs { order: 3; width: 100%; margin-left: 0; padding-top: 11px; border-top: 1px solid var(--rule); }
+  .tools { margin-left: auto; gap: 8px 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .lede { flex-direction: column; align-items: flex-start; gap: 16px; padding-top: 30px; }
+  h1 { font-size: 43px; }
+  .ledger { grid-template-columns: 1fr 1fr; }
+  .ledger-item { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .ledger-item:nth-child(odd) { border-right: 1px solid var(--rule); }
+  .editor-body { grid-template-columns: 40px 1fr; height: 460px; }
+  .editor-toolbar { flex-wrap: wrap; }
+  .editor-toolbar .actions { width: 100%; }
+  .editor-toolbar .actions .btn { flex: 1; }
+  .chart-frame { grid-template-columns: 36px 1fr; }
+  .x-axis { margin-left: 46px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="masthead">
+    <div class="brand">
+      <span class="mark">A</span>
+      <div>
+        <span class="wordmark">AI Gateway</span>
+        <span class="tagline" data-i18n="tagline">Local model switchboard</span>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Sections" data-i18n-aria="nav.sections">
+      <button class="tab active" data-tab="overview" data-i18n="nav.overview">Overview</button>
+      <button class="tab" data-tab="config" data-i18n="nav.config">Configuration</button>
+    </nav>
+    <div class="tools">
+      <div class="status" id="status"><i class="dot"></i><span id="statusText" data-i18n="status.connecting">connecting</span></div>
+      <button class="textbtn" id="langBtn" aria-label="Switch language">中文</button>
+      <button class="textbtn" id="themeBtn">Dark</button>
+      <label class="auto"><input type="checkbox" id="autoRefresh" checked /><span data-i18n="auto">Auto 5s</span></label>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-overview" class="view">
+      <div class="lede">
+        <div>
+          <div class="eyebrow"><span>01</span> <span data-i18n="section.traffic">Traffic</span></div>
+          <h1><span id="heroRequests">0</span> <em data-i18n="hero.requests">requests</em></h1>
+          <p class="lede-copy" id="heroCopy" data-i18n="hero.waiting">Waiting for the first request.</p>
+        </div>
+        <div class="range" id="rangeSeg" aria-label="Time range" data-i18n-aria="range.label">
+          <button data-range="1h">1h</button>
+          <button data-range="24h" class="active">24h</button>
+          <button data-range="7d">7d</button>
+          <button data-range="30d">30d</button>
+          <button data-range="all" data-i18n="range.all">all</button>
+        </div>
+      </div>
+
+      <dl class="ledger">
+        <div class="ledger-item"><dt data-i18n="metric.success">Success</dt><dd id="cSuccess">—</dd><span class="sub" id="cSuccessSub">&nbsp;</span></div>
+        <div class="ledger-item"><dt data-i18n="metric.input">Input tokens</dt><dd id="cIn">—</dd><span class="sub" id="cInSub">&nbsp;</span></div>
+        <div class="ledger-item"><dt data-i18n="metric.output">Output tokens</dt><dd id="cOut">—</dd><span class="sub" id="cOutSub">&nbsp;</span></div>
+        <div class="ledger-item"><dt data-i18n="metric.speed">Avg speed</dt><dd id="cTps">—</dd><span class="sub" id="cTpsSub">&nbsp;</span></div>
+        <div class="ledger-item"><dt data-i18n="metric.ttft">Avg TTFT</dt><dd id="cTtft">—</dd><span class="sub" id="cTtftSub">&nbsp;</span></div>
+        <div class="ledger-item"><dt data-i18n="metric.cost">Est. cost</dt><dd id="cCost">—</dd><span class="sub" id="cCostSub">&nbsp;</span></div>
+      </dl>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span>02</span> <span data-i18n="section.tokens">Token movement</span></div>
+          <div class="legend">
+            <span><i class="in"></i><span data-i18n="legend.input">input</span></span>
+            <span><i class="out"></i><span data-i18n="legend.output">output</span></span>
+          </div>
+        </div>
+        <div class="chart-frame">
+          <div class="chart-yaxis" id="chartY"></div>
+          <div class="chart-plot" id="chart"><div class="chart-empty" data-i18n="chart.empty">No traffic in this window.</div></div>
+        </div>
+        <div class="x-axis" id="xAxis"></div>
+      </section>
+
+      <div class="split">
+        <section class="block">
+          <div class="block-head">
+            <div class="eyebrow"><span>03</span> <span data-i18n="section.models">Models</span></div>
+            <div class="meta" data-i18n="meta.byTokens">by token volume</div>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr><th data-i18n="th.model">Model</th><th class="num" data-i18n="th.req">Req</th><th class="num" data-i18n="th.in">In</th><th class="num" data-i18n="th.out">Out</th><th class="num" data-i18n="th.tps">Tok/s</th><th class="num" data-i18n="th.avg">Avg</th><th class="num" data-i18n="th.cost">Cost</th></tr></thead>
+              <tbody id="modelRows"><tr><td colspan="7" class="empty" data-i18n="empty.noRequests">No requests.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="block">
+          <div class="block-head">
+            <div class="eyebrow"><span>04</span> <span data-i18n="section.providers">Providers</span></div>
+            <div class="meta" data-i18n="meta.byTokens">by token volume</div>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr><th data-i18n="th.provider">Provider</th><th class="num" data-i18n="th.req">Req</th><th class="num" data-i18n="th.in">In</th><th class="num" data-i18n="th.out">Out</th><th class="num" data-i18n="th.tps">Tok/s</th><th class="num" data-i18n="th.errors">Errors</th><th class="num" data-i18n="th.cost">Cost</th></tr></thead>
+              <tbody id="providerRows"><tr><td colspan="7" class="empty" data-i18n="empty.noRequests">No requests.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span>05</span> <span data-i18n="section.recent">Recent requests</span></div>
+          <div class="meta" id="requestHint"></div>
+          <div class="actions"><button class="btn small" id="refreshBtn" data-i18n="action.refresh">Refresh</button></div>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="th.time">Time</th><th data-i18n="th.model">Model</th><th data-i18n="th.route">Route</th><th data-i18n="th.format">Format</th>
+                <th class="num" data-i18n="th.input">Input</th><th class="num" data-i18n="th.output">Output</th><th class="num" data-i18n="th.tps">Tok/s</th>
+                <th class="num" data-i18n="th.ttft">TTFT</th><th class="num" data-i18n="th.total">Total</th><th class="num" data-i18n="th.cost">Cost</th><th class="num" data-i18n="th.status">Status</th>
+              </tr>
+            </thead>
+            <tbody id="requestRows"><tr><td colspan="11" class="empty" data-i18n="empty.noRequestsYet">No requests yet.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span>06</span> <span data-i18n="section.routing">Routing</span></div>
+          <div class="meta" data-i18n="meta.priceCacheLatency">price · cache · latency</div>
+        </div>
+        <div id="routingList"><div class="empty" data-i18n="routing.loading">Loading routing…</div></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span>07</span> <span data-i18n="nav.config">Configuration</span></div>
+          <div class="meta" id="cfgHint"></div>
+          <div class="actions">
+            <button class="btn small" id="healthBtn" data-i18n="action.testUpstreams">Test upstreams</button>
+            <button class="btn small" id="reloadCfgBtn" data-i18n="action.reloadFile">Reload file</button>
+          </div>
+        </div>
+        <div class="split2">
+          <div>
+            <h3 class="subhead" data-i18n="section.providers">Providers</h3>
+            <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th data-i18n="th.provider">Provider</th><th data-i18n="th.format">Format</th><th data-i18n="th.baseUrl">Base URL</th><th data-i18n="th.models">Models</th><th data-i18n="th.key">Key</th><th data-i18n="th.health">Health</th></tr></thead>
+                <tbody id="providersBody"><tr><td colspan="6" class="empty" data-i18n="empty.noProviders">No providers.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 class="subhead" data-i18n="config.mappings">Mappings</h3>
+            <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th data-i18n="th.model">Model</th><th data-i18n="th.strategy">Strategy</th><th data-i18n="th.formats">Formats</th><th class="num" data-i18n="th.routes">Routes</th><th class="num" data-i18n="th.priced">Priced</th></tr></thead>
+                <tbody id="mappingsBody"><tr><td colspan="5" class="empty" data-i18n="empty.noMappings">No explicit mappings.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <p class="note" id="adminNote"></p>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span>08</span> <span data-i18n="section.upstreamModels">Upstream models</span></div>
+          <div class="meta" id="discoverHint"></div>
+          <div class="actions">
+            <button class="btn small" id="fetchModelsBtn" data-i18n="action.fetchModels">Fetch models</button>
+            <button class="btn small" id="syncAllBtn" data-i18n="action.addAllMissing" hidden>Add all missing</button>
+          </div>
+        </div>
+        <div id="discoverList"><div class="empty" data-i18n="discover.idle">Fetch the model catalogue from each upstream to compare it with this configuration.</div></div>
+      </section>
+    </section>
+
+    <section id="view-config" class="view" hidden>
+      <div class="lede">
+        <div>
+          <div class="eyebrow"><span>—</span> <span data-i18n="nav.config">Configuration</span></div>
+          <h1><span data-i18n="config.edit">Edit</span> <em>config.toml</em></h1>
+          <p class="lede-copy" data-i18n="config.lede">
+            Changes are validated, backed up, written atomically, and applied immediately.
+            Host, port, and database changes are marked for the next restart.
+          </p>
+        </div>
+        <div class="config-path">
+          <span class="label" data-i18n="config.file">File</span>
+          <code id="cfgPath">—</code>
+        </div>
+      </div>
+
+      <div class="editor-shell">
+        <div class="editor-toolbar">
+          <div class="file-meta">
+            <span class="dirty" id="dirtyBadge" data-i18n="config.unsaved" hidden>unsaved</span>
+            <span id="cfgFileMeta">—</span>
+          </div>
+          <div class="actions">
+            <button class="btn" id="cfgValidate" data-i18n="action.validate">Validate</button>
+            <button class="btn" id="cfgReload" data-i18n="action.reloadDisk">Reload from disk</button>
+            <button class="btn primary" id="cfgSave" data-i18n="action.saveApply">Save &amp; apply</button>
+          </div>
+        </div>
+        <div class="editor-body">
+          <pre class="gutter" id="gutter" aria-hidden="true">1</pre>
+          <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="config.toml"></textarea>
+        </div>
+        <div class="editor-status">
+          <span class="status-line"><i class="dot" id="cfgDot"></i><span id="cfgStatus" data-i18n="status.waiting">Waiting for the file.</span></span>
+          <span class="meta" id="cfgMeta"></span>
+        </div>
+      </div>
+
+      <p class="note warn" id="restartNote" hidden></p>
+      <p class="note warn" id="tokenChangeNote" hidden></p>
+      <p class="note" id="configAdminNote"></p>
+      <p class="note" data-i18n-html="config.securityNote">
+        The file contains API keys. This page is intended for localhost. Set
+        <code>admin_token</code> before exposing the port beyond 127.0.0.1.
+        A backup is written to <code>config.toml.bak</code> on every save.
+      </p>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span data-i18n="config.preview">Preview</span> <span data-i18n="config.parsed">Parsed configuration</span></div>
+          <div class="actions push"><button class="btn small" id="cfgRefreshSummary" data-i18n="action.refreshSummary">Refresh summary</button></div>
+        </div>
+        <div id="cfgSummary"><div class="empty" data-i18n="config.loadingSummary">Loading configuration summary…</div></div>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    <span>AI Gateway <span id="version">v0.1.0</span></span>
+    <span class="mono" id="footerCfg"></span>
+    <span class="spacer"></span>
+    <span id="updated"></span>
+  </footer>
+</div>
+
+<div class="modal" id="tokenModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="tokenTitle">
+    <div class="eyebrow"><span>—</span> <span data-i18n="modal.access">Access</span></div>
+    <h2 id="tokenTitle" data-i18n="modal.title">Admin token</h2>
+    <p data-i18n="modal.body">This gateway requires an admin token for configuration and statistics.</p>
+    <input id="tokenInput" type="password" placeholder="admin token" data-i18n-placeholder="modal.placeholder" autocomplete="off" />
+    <div class="modal-actions">
+      <button class="btn" id="tokenCancel" data-i18n="action.cancel">Cancel</button>
+      <button class="btn primary" id="tokenSave" data-i18n="action.continue">Continue</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const ranges = ["1h", "24h", "7d", "30d", "all"];
+  const state = {
+    range: localStorage.getItem("gw_range") || "24h",
+    token: localStorage.getItem("gw_admin_token") || "",
+    theme: localStorage.getItem("gw_theme") || "light",
+    lang: "en",
+    tab: "overview",
+    auto: true,
+    timer: null,
+    dirty: false,
+    rawLoaded: false,
+    bound: false,
+    modalOpen: false,
+    config: null,
+    routing: null,
+    discovery: null,
+    cfgStatus: null,
+    status: { ok: true, text: null, key: "status.connecting" },
+  };
+  if (!ranges.includes(state.range)) state.range = "24h";
+  const themeParam = new URLSearchParams(location.search).get("theme");
+  if (themeParam === "dark" || themeParam === "light") state.theme = themeParam;
+
+  const savedLang = localStorage.getItem("gw_lang");
+  if (savedLang === "zh" || savedLang === "en") {
+    state.lang = savedLang;
+  } else if ((navigator.language || "").toLowerCase().startsWith("zh")) {
+    state.lang = "zh";
+  }
+  const langParam = new URLSearchParams(location.search).get("lang");
+  if (langParam === "zh" || langParam === "en") state.lang = langParam;
+
+  const MESSAGES = {
+    en: {
+      "tagline": "Local model switchboard",
+      "nav.sections": "Sections",
+      "nav.overview": "Overview",
+      "nav.config": "Configuration",
+      "status.connecting": "connecting",
+      "status.live": "live",
+      "status.offline": "offline",
+      "auto": "Auto 5s",
+      "range.label": "Time range",
+      "range.all": "all",
+      "section.traffic": "Traffic",
+      "section.tokens": "Token movement",
+      "section.models": "Models",
+      "section.providers": "Providers",
+      "section.recent": "Recent requests",
+      "section.routing": "Routing",
+      "section.upstreamModels": "Upstream models",
+      "hero.requests": "requests",
+      "hero.waiting": "Waiting for the first request.",
+      "hero.summary": "{done} completed · {failed} failed · {tokens} tokens moved",
+      "metric.success": "Success",
+      "metric.input": "Input tokens",
+      "metric.output": "Output tokens",
+      "metric.speed": "Avg speed",
+      "metric.ttft": "Avg TTFT",
+      "metric.cost": "Est. cost",
+      "sub.failed": "{n} failed",
+      "sub.noTraffic": "no traffic",
+      "sub.avgPerRequest": "{n} avg / request",
+      "sub.tpsEstimated": "tok/s · {n} estimated",
+      "sub.tpsStreaming": "tok/s · streaming only",
+      "sub.avgTotal": "avg total {n}",
+      "sub.firstToken": "first token",
+      "sub.costEstimated": "{currency} · estimated",
+      "sub.costByCurrency": "per currency · estimated",
+      "sub.noPricing": "no pricing configured",
+      "legend.input": "input",
+      "legend.output": "output",
+      "chart.empty": "No traffic in this window.",
+      "chart.tooltip": "{time} · {tokens} tokens · {requests} requests",
+      "chart.errors": " · {n} errors",
+      "meta.byTokens": "by token volume",
+      "meta.priceCacheLatency": "price · cache · latency",
+      "th.model": "Model",
+      "th.req": "Req",
+      "th.in": "In",
+      "th.out": "Out",
+      "th.tps": "Tok/s",
+      "th.avg": "Avg",
+      "th.cost": "Cost",
+      "th.provider": "Provider",
+      "th.errors": "Errors",
+      "th.time": "Time",
+      "th.route": "Route",
+      "th.format": "Format",
+      "th.input": "Input",
+      "th.output": "Output",
+      "th.ttft": "TTFT",
+      "th.total": "Total",
+      "th.status": "Status",
+      "th.baseUrl": "Base URL",
+      "th.models": "Models",
+      "th.key": "Key",
+      "th.health": "Health",
+      "th.strategy": "Strategy",
+      "th.formats": "Formats",
+      "th.routes": "Routes",
+      "th.priced": "Priced",
+      "th.upstream": "upstream",
+      "th.pricePerM": "Price / 1M",
+      "th.cache": "Cache",
+      "th.estCost": "Est. cost",
+      "th.state": "State",
+      "empty.noRequests": "No requests.",
+      "empty.noRequestsYet": "No requests yet.",
+      "empty.noProviders": "No providers.",
+      "empty.noMappings": "No explicit mappings.",
+      "action.refresh": "Refresh",
+      "action.testUpstreams": "Test upstreams",
+      "action.reloadFile": "Reload file",
+      "action.validate": "Validate",
+      "action.reloadDisk": "Reload from disk",
+      "action.saveApply": "Save & apply",
+      "action.refreshSummary": "Refresh summary",
+      "action.fetchModels": "Fetch models",
+      "action.addAllMissing": "Add all missing",
+      "action.cancel": "Cancel",
+      "action.continue": "Continue",
+      "config.mappings": "Mappings",
+      "config.edit": "Edit",
+      "config.lede": "Changes are validated, backed up, written atomically, and applied immediately. Host, port, and database changes are marked for the next restart.",
+      "config.file": "File",
+      "config.unsaved": "unsaved",
+      "config.preview": "Preview",
+      "config.parsed": "Parsed configuration",
+      "config.loadingSummary": "Loading configuration summary…",
+      "config.securityNote": "The file contains API keys. This page is intended for localhost. Set <code>admin_token</code> before exposing the port beyond 127.0.0.1. A backup is written to <code>config.toml.bak</code> on every save.",
+      "config.hint": "{providers} providers · {models} models · {routes} routes",
+      "config.adminSet": "Admin token is set. Raw configuration and statistics require it.",
+      "config.adminOpen": "Admin token is not set. Configuration access is open to this machine; set admin_token before exposing the port.",
+      "config.editorAdminSet": "Admin token is set. The raw configuration endpoint requires it.",
+      "config.editorAdminOpen": "Admin token is not set — this editor and the raw configuration are open to this machine. Set admin_token before exposing the port.",
+      "config.models": "{n} models",
+      "config.keySet": "set",
+      "config.keyNone": "none",
+      "config.noProviders": "No providers.",
+      "config.noMappings": "No explicit mappings. Provider model names are used directly.",
+      "config.noMappingsShort": "No explicit mappings.",
+      "config.providers": "Providers",
+      "config.modelRouting": "Model routing",
+      "config.discardConfirm": "Discard unsaved changes and reload from disk?",
+      "config.saving": "Saving…",
+      "config.testing": "Testing…",
+      "config.restartRequired": "Restart required to apply {fields}. The listener and usage database stay as they are until restart.",
+      "config.tokenChanged": "admin_token changed. If the next request returns 401, enter the new token.",
+      "config.reloadFailed": "reload failed",
+      "status.waiting": "Waiting for the file.",
+      "status.loaded": "loaded · Loaded from disk.",
+      "status.checking": "checking · Validating the file…",
+      "status.valid": "valid · {providers} providers · {models} models",
+      "status.invalid": "invalid · {error}",
+      "status.error": "error · {error}",
+      "status.saved": "saved · {providers} providers · {models} models",
+      "status.savedBackup": "saved · {providers} providers · {models} models · backup written",
+      "status.invalidFallback": "Invalid configuration.",
+      "requests.total": "{n} total",
+      "tag.est": "est",
+      "routing.loading": "Loading routing…",
+      "routing.unavailable": "Routing data unavailable.",
+      "routing.single": "No explicit model has multiple routes. Add [[models.routes]] to compare providers, protocols and prices.",
+      "routing.suggested": "suggested",
+      "routing.noSwitch": "no switch suggested",
+      "routing.requests": "{n} requests",
+      "routing.noTraffic": "no traffic",
+      "routing.reportedAvg": "reported avg",
+      "routing.noPrice": "no price",
+      "routing.ok": "ok",
+      "routing.error": "{n} err",
+      "routing.cooldown": "cooldown {n}s",
+      "routing.copyStrategy": "Copy strategy",
+      "routing.copyTitle": "Copy the suggested strategy lines for this model's TOML block",
+      "routing.chosen": "chosen for {routes}",
+      "routing.copyOk": "Copied",
+      "routing.copyFail": "Copy failed",
+      "routing.reasonCheaper": "~{pct}% lower estimated cost at the current price",
+      "routing.reasonFaster": "~{pct}% lower observed TTFT",
+      "discover.idle": "Fetch the model catalogue from each upstream to compare it with this configuration.",
+      "discover.fetching": "Fetching model catalogues…",
+      "discover.summary": "{upstream} upstream · {configured} configured · {missing} missing",
+      "discover.upToDate": "up to date",
+      "discover.add": "Add {n}",
+      "discover.adding": "Adding…",
+      "discover.synced": "Added {n} model(s) to {provider}.",
+      "discover.syncFailed": "Sync failed.",
+      "discover.addConfirm": "Add {n} missing model(s) from {provider} to config.toml?",
+      "discover.addAllConfirm": "Add {n} missing model(s) from all upstreams to config.toml?",
+      "discover.allDone": "All upstream models are configured.",
+      "discover.hint": "{missing} missing across {providers} providers",
+      "discover.allProviders": "all upstreams",
+      "discover.errors": "{n} provider(s) failed.",
+      "discover.noProviders": "No providers configured.",
+      "theme.dark": "Dark",
+      "theme.light": "Light",
+      "editor.meta": "{lines} lines · {bytes} bytes",
+      "footer.updated": "updated {time} · uptime {uptime}",
+      "modal.access": "Access",
+      "modal.title": "Admin token",
+      "modal.body": "This gateway requires an admin token for configuration and statistics.",
+      "modal.placeholder": "admin token",
+    },
+    zh: {
+      "tagline": "本地模型交换台",
+      "nav.sections": "页面区块",
+      "nav.overview": "总览",
+      "nav.config": "配置",
+      "status.connecting": "连接中",
+      "status.live": "在线",
+      "status.offline": "离线",
+      "auto": "自动 5s",
+      "range.label": "时间范围",
+      "range.all": "全部",
+      "section.traffic": "流量",
+      "section.tokens": "Token 流动",
+      "section.models": "模型",
+      "section.providers": "上游",
+      "section.recent": "最近请求",
+      "section.routing": "路由",
+      "section.upstreamModels": "上游模型",
+      "hero.requests": "次请求",
+      "hero.waiting": "等待第一个请求。",
+      "hero.summary": "{done} 成功 · {failed} 失败 · {tokens} token 流转",
+      "metric.success": "成功率",
+      "metric.input": "输入 token",
+      "metric.output": "输出 token",
+      "metric.speed": "平均速度",
+      "metric.ttft": "平均 TTFT",
+      "metric.cost": "估算成本",
+      "sub.failed": "{n} 次失败",
+      "sub.noTraffic": "无流量",
+      "sub.avgPerRequest": "平均 {n} / 请求",
+      "sub.tpsEstimated": "tok/s · {n} 条为估算",
+      "sub.tpsStreaming": "tok/s · 仅统计流式",
+      "sub.avgTotal": "平均总计 {n}",
+      "sub.firstToken": "首字延迟",
+      "sub.costEstimated": "{currency} · 估算",
+      "sub.costByCurrency": "按币种分别估算",
+      "sub.noPricing": "未配置价格",
+      "legend.input": "输入",
+      "legend.output": "输出",
+      "chart.empty": "此时间范围内暂无流量。",
+      "chart.tooltip": "{time} · {tokens} token · {requests} 次请求",
+      "chart.errors": " · {n} 个错误",
+      "meta.byTokens": "按 token 量",
+      "meta.priceCacheLatency": "价格 · 缓存 · 延迟",
+      "th.model": "模型",
+      "th.req": "请求",
+      "th.in": "输入",
+      "th.out": "输出",
+      "th.tps": "Tok/s",
+      "th.avg": "平均",
+      "th.cost": "成本",
+      "th.provider": "上游",
+      "th.errors": "错误",
+      "th.time": "时间",
+      "th.route": "路由",
+      "th.format": "格式",
+      "th.input": "输入",
+      "th.output": "输出",
+      "th.ttft": "TTFT",
+      "th.total": "总计",
+      "th.status": "状态",
+      "th.baseUrl": "基础 URL",
+      "th.models": "模型",
+      "th.key": "密钥",
+      "th.health": "健康",
+      "th.strategy": "策略",
+      "th.formats": "格式",
+      "th.routes": "路由",
+      "th.priced": "已定价",
+      "th.upstream": "模型",
+      "th.pricePerM": "价格 / 1M",
+      "th.cache": "缓存",
+      "th.estCost": "估算成本",
+      "th.state": "状态",
+      "empty.noRequests": "暂无请求。",
+      "empty.noRequestsYet": "暂无请求。",
+      "empty.noProviders": "暂无上游。",
+      "empty.noMappings": "暂无显式映射。",
+      "action.refresh": "刷新",
+      "action.testUpstreams": "测试上游",
+      "action.reloadFile": "重载文件",
+      "action.validate": "校验",
+      "action.reloadDisk": "从磁盘重载",
+      "action.saveApply": "保存并应用",
+      "action.refreshSummary": "刷新摘要",
+      "action.fetchModels": "获取模型",
+      "action.addAllMissing": "全部添加",
+      "action.cancel": "取消",
+      "action.continue": "继续",
+      "config.mappings": "模型映射",
+      "config.edit": "编辑",
+      "config.lede": "修改会经过校验、备份、原子写入并立即生效。host、port 和 database 的变更会标记为下次重启生效。",
+      "config.file": "文件",
+      "config.unsaved": "未保存",
+      "config.preview": "预览",
+      "config.parsed": "已解析配置",
+      "config.loadingSummary": "正在加载配置摘要…",
+      "config.securityNote": "文件包含 API key。此页面仅供本机使用。在将端口暴露到 127.0.0.1 之外前，请设置 <code>admin_token</code>。每次保存都会写入 <code>config.toml.bak</code> 备份。",
+      "config.hint": "{providers} 个上游 · {models} 个模型 · {routes} 条路由",
+      "config.adminSet": "已设置管理令牌；读取原始配置和统计数据时需要提供。",
+      "config.adminOpen": "未设置管理令牌；本机可公开访问配置。将端口暴露前请设置 admin_token。",
+      "config.editorAdminSet": "已设置管理令牌；原始配置接口需要提供令牌。",
+      "config.editorAdminOpen": "未设置管理令牌 — 此编辑器和原始配置对本机开放。将端口暴露前请设置 admin_token。",
+      "config.models": "{n} 个模型",
+      "config.keySet": "已设置",
+      "config.keyNone": "无",
+      "config.noProviders": "暂无上游。",
+      "config.noMappings": "暂无显式映射。直接使用上游模型名。",
+      "config.noMappingsShort": "暂无显式映射。",
+      "config.providers": "上游",
+      "config.modelRouting": "模型路由",
+      "config.discardConfirm": "放弃未保存的修改并从磁盘重载？",
+      "config.saving": "保存中…",
+      "config.testing": "测试中…",
+      "config.restartRequired": "需要重启才能应用 {fields}。重启前监听端口和用量数据库保持不变。",
+      "config.tokenChanged": "admin_token 已变更。如果下一次请求返回 401，请输入新令牌。",
+      "config.reloadFailed": "重载失败",
+      "status.waiting": "等待文件。",
+      "status.loaded": "已载入 · 已从磁盘读取。",
+      "status.checking": "检查中 · 正在校验文件…",
+      "status.valid": "校验通过 · {providers} 个上游 · {models} 个模型",
+      "status.invalid": "校验失败 · {error}",
+      "status.error": "错误 · {error}",
+      "status.saved": "已保存 · {providers} 个上游 · {models} 个模型",
+      "status.savedBackup": "已保存 · {providers} 个上游 · {models} 个模型 · 已写入备份",
+      "status.invalidFallback": "配置无效。",
+      "requests.total": "共 {n} 条",
+      "tag.est": "估",
+      "routing.loading": "正在加载路由…",
+      "routing.unavailable": "路由数据不可用。",
+      "routing.single": "暂无包含多条路由的显式模型。添加 [[models.routes]] 后可比较上游、协议和价格。",
+      "routing.suggested": "建议",
+      "routing.noSwitch": "暂无切换建议",
+      "routing.requests": "{n} 次请求",
+      "routing.noTraffic": "无流量",
+      "routing.reportedAvg": "上游上报均值",
+      "routing.noPrice": "无价格",
+      "routing.ok": "正常",
+      "routing.error": "{n} 个错误",
+      "routing.cooldown": "冷却 {n}s",
+      "routing.copyStrategy": "复制策略",
+      "routing.copyTitle": "复制该模型 TOML 块的推荐策略行",
+      "routing.chosen": "当前选择：{routes}",
+      "routing.copyOk": "已复制",
+      "routing.copyFail": "复制失败",
+      "routing.reasonCheaper": "当前价格下估算成本低约 {pct}%",
+      "routing.reasonFaster": "实测首字延迟低约 {pct}%",
+      "discover.idle": "从各上游获取模型目录，与当前配置对比。",
+      "discover.fetching": "正在获取模型目录…",
+      "discover.summary": "上游 {upstream} · 已配置 {configured} · 缺少 {missing}",
+      "discover.upToDate": "已是最新",
+      "discover.add": "添加 {n}",
+      "discover.adding": "添加中…",
+      "discover.synced": "已向 {provider} 添加 {n} 个模型。",
+      "discover.syncFailed": "同步失败。",
+      "discover.addConfirm": "将 {provider} 的 {n} 个缺失模型加入 config.toml？",
+      "discover.addAllConfirm": "将所有上游的 {n} 个缺失模型加入 config.toml？",
+      "discover.allDone": "所有上游模型都已配置。",
+      "discover.hint": "共 {missing} 个缺失，涉及 {providers} 个上游",
+      "discover.allProviders": "全部上游",
+      "discover.errors": "{n} 个上游获取失败。",
+      "discover.noProviders": "未配置上游。",
+      "theme.dark": "深色",
+      "theme.light": "浅色",
+      "editor.meta": "{lines} 行 · {bytes} 字节",
+      "footer.updated": "更新于 {time} · 运行 {uptime}",
+      "modal.access": "访问",
+      "modal.title": "管理令牌",
+      "modal.body": "此网关需要管理令牌才能访问配置和统计数据。",
+      "modal.placeholder": "管理令牌",
+    },
+  };
+
+  function t(key, vars) {
+    const table = MESSAGES[state.lang] || MESSAGES.en;
+    let text = table[key] != null ? table[key] : MESSAGES.en[key] != null ? MESSAGES.en[key] : key;
+    if (vars) {
+      Object.entries(vars).forEach(([name, value]) => {
+        text = text.split("{" + name + "}").join(String(value));
+      });
+    }
+    return text;
+  }
+
+  function locale() {
+    return state.lang === "zh" ? "zh-CN" : "en-GB";
+  }
+
+  const ROUTING_REASONS_ZH = {
+    "current strategy already selects the best available route": "当前策略已选中最佳路由",
+    "current route is in cooldown; switch to a healthy route": "当前路由处于冷却，建议切换到健康路由",
+    "similar estimated cost; keep the current route": "估算成本接近，保持当前路由",
+    "no comparable pricing or latency; keep the current route": "没有可比较的价格或延迟，保持当前路由",
+    "current route is not in the enabled route set": "当前路由不在启用集合中",
+    "no route available": "无可用路由",
+  };
+
+  function reasonText(reason) {
+    if (!reason) return t("routing.noSwitch");
+    if (state.lang !== "zh") return reason;
+    let match = reason.match(/^~(\d+)% lower estimated cost/);
+    if (match) return t("routing.reasonCheaper", { pct: match[1] });
+    match = reason.match(/^~(\d+)% lower observed TTFT/);
+    if (match) return t("routing.reasonFaster", { pct: match[1] });
+    return ROUTING_REASONS_ZH[reason] || reason;
+  }
+
+  const countFmt = new Intl.NumberFormat("en-US");
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[ch]);
+  }
+
+  function count(n) {
+    return countFmt.format(Number(n) || 0);
+  }
+
+  function fmt(n) {
+    n = Number(n) || 0;
+    const trim = (v) => v.toFixed(1).replace(/\.0$/, "");
+    if (n >= 1e9) return trim(n / 1e9) + "B";
+    if (n >= 1e6) return trim(n / 1e6) + "M";
+    if (n >= 1e3) return trim(n / 1e3) + "k";
+    return String(Math.round(n));
+  }
+
+  function fmtTps(value) {
+    if (value == null || !isFinite(value) || value <= 0) return "—";
+    return value < 10 ? value.toFixed(1) : String(Math.round(value));
+  }
+
+  function fmtMs(value) {
+    if (value == null || !isFinite(value)) return "—";
+    if (value >= 1000) return (value / 1000).toFixed(1) + "s";
+    return Math.round(value) + "ms";
+  }
+
+  function fmtPrice(value) {
+    if (value == null || !isFinite(value)) return "—";
+    if (value === 0) return "0";
+    if (value < 0.01) return value.toPrecision(2);
+    if (value < 1) return value.toFixed(3);
+    return value.toFixed(2);
+  }
+
+  function fmtCost(value, currency) {
+    if (value == null || !isFinite(value)) return "—";
+    let text;
+    if (value === 0) text = "0";
+    else if (value < 0.0001) text = value.toExponential(1);
+    else if (value < 0.01) text = value.toFixed(5);
+    else if (value < 1) text = value.toFixed(3);
+    else text = value.toFixed(2);
+    return text;
+  }
+
+  function costTotals(row) {
+    const costs = Array.isArray(row && row.costs) ? row.costs : [];
+    return costs.filter((item) => item && item.currency && isFinite(item.cost));
+  }
+
+  function fmtCostBreakdown(costs) {
+    return costs.map((item) => item.currency + " " + fmtCost(item.cost)).join(" · ");
+  }
+
+  function costCellText(row) {
+    const costs = costTotals(row);
+    if (costs.length > 1) return fmtCostBreakdown(costs);
+    if (row && row.currency) return fmtCost(row.cost);
+    if (row && row.cost > 0) return fmtCost(row.cost);
+    return "—";
+  }
+
+  function costCellTitle(row) {
+    const costs = costTotals(row);
+    if (costs.length) return costs.map((item) => item.currency + " " + fmtCost(item.cost)).join("\n");
+    return (row && row.currency) || "";
+  }
+
+  function fmtPercent(value) {
+    if (value == null || !isFinite(value)) return "—";
+    return (value * 100).toFixed(value > 0 && value < 0.1 ? 1 : 0) + "%";
+  }
+
+  function timeLabel(ts) {
+    return new Date(ts).toLocaleTimeString(locale(), {
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    });
+  }
+
+  function bucketLabel(ts, range) {
+    if (range === "7d" || range === "30d" || range === "all") {
+      return new Date(ts).toLocaleDateString(locale(), { month: "short", day: "numeric" });
+    }
+    return new Date(ts).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  function uptime(secs) {
+    secs = Number(secs) || 0;
+    if (secs < 60) return secs + "s";
+    const minutes = Math.floor(secs / 60);
+    if (minutes < 60) return minutes + "m";
+    return Math.floor(minutes / 60) + "h " + (minutes % 60) + "m";
+  }
+
+  function truncate(text, max) {
+    text = String(text || "");
+    return text.length > max ? text.slice(0, max - 1) + "…" : text;
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+      textarea.remove();
+      return ok;
+    }
+  }
+
+  function strategySnippet(entry) {
+    const strategy = entry.suggested_strategy || entry.strategy;
+    let snippet = 'strategy = "' + strategy + '"\n';
+    if (strategy === "manual" && entry.suggested_route) {
+      snippet += 'route = "' + entry.suggested_route + '"\n';
+    }
+    return snippet;
+  }
+
+  function renderStatus() {
+    const status = state.status;
+    $("statusText").textContent = status.text ||
+      t(status.key || (status.ok ? "status.live" : "status.offline"));
+    $("status").querySelector(".dot").className = "dot " + (status.ok ? "ok" : "err");
+  }
+
+  function setStatus(ok, text) {
+    state.status = {
+      ok,
+      text: text || null,
+      key: text ? null : ok ? "status.live" : "status.offline",
+    };
+    renderStatus();
+  }
+
+  async function api(path, options = {}) {
+    const headers = Object.assign({}, options.headers || {});
+    if (state.token) headers["x-admin-token"] = state.token;
+    const response = await fetch(path, Object.assign({}, options, { headers }));
+    if (response.status === 401) {
+      showTokenModal();
+      throw new Error("unauthorized");
+    }
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+    if (!response.ok) {
+      let message = "HTTP " + response.status;
+      if (data) {
+        if (typeof data.error === "string") message = data.error;
+        else if (data.error && data.error.message) message = data.error.message;
+        else if (data.message) message = data.message;
+      }
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  // --- overview -----------------------------------------------------------
+
+  async function loadOverview() {
+    const data = await api("/admin/api/overview?range=" + encodeURIComponent(state.range));
+    const stats = data.stats || {};
+    $("heroRequests").textContent = count(stats.requests);
+    $("heroCopy").textContent = stats.requests
+      ? t("hero.summary", {
+          done: count(stats.success),
+          failed: count(stats.errors),
+          tokens: fmt(stats.total_tokens),
+        })
+      : t("hero.waiting");
+
+    const rate = stats.requests ? (100 * stats.success) / stats.requests : null;
+    $("cSuccess").textContent = rate == null ? "—" : rate.toFixed(rate >= 99.5 ? 0 : 1) + "%";
+    $("cSuccessSub").textContent = stats.requests
+      ? t("sub.failed", { n: count(stats.errors) })
+      : t("sub.noTraffic");
+    $("cIn").textContent = fmt(stats.prompt_tokens);
+    $("cInSub").textContent = stats.requests
+      ? t("sub.avgPerRequest", { n: fmt(stats.prompt_tokens / stats.requests) })
+      : "—";
+    $("cOut").textContent = fmt(stats.completion_tokens);
+    $("cOutSub").textContent = stats.requests
+      ? t("sub.avgPerRequest", { n: fmt(stats.completion_tokens / stats.requests) })
+      : "—";
+    $("cTps").textContent = fmtTps(stats.avg_tps);
+    $("cTpsSub").textContent = stats.estimated_requests
+      ? t("sub.tpsEstimated", { n: count(stats.estimated_requests) })
+      : t("sub.tpsStreaming");
+    $("cTtft").textContent = stats.avg_ttft_ms ? fmtMs(stats.avg_ttft_ms) : "—";
+    $("cTtftSub").textContent = stats.avg_duration_ms
+      ? t("sub.avgTotal", { n: fmtMs(stats.avg_duration_ms) })
+      : t("sub.firstToken");
+    const overviewCosts = costTotals(stats);
+    $("cCost").textContent = overviewCosts.length > 1
+      ? fmtCostBreakdown(overviewCosts)
+      : stats.cost_currency ? fmtCost(stats.cost) : "—";
+    $("cCostSub").textContent = overviewCosts.length > 1
+      ? t("sub.costByCurrency")
+      : stats.cost_currency
+        ? t("sub.costEstimated", { currency: stats.cost_currency })
+        : t("sub.noPricing");
+    setStatus(true);
+    return data;
+  }
+
+  function niceMax(value) {
+    if (value <= 0) return 1;
+    const exp = Math.pow(10, Math.floor(Math.log10(value)));
+    const n = value / exp;
+    const mult = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+    return mult * exp;
+  }
+
+  function renderChart(buckets, range) {
+    const plot = $("chart");
+    const axis = $("xAxis");
+    const yaxis = $("chartY");
+    plot.innerHTML = "";
+    axis.innerHTML = "";
+    yaxis.innerHTML = "";
+    if (
+      !buckets ||
+      !buckets.length ||
+      !buckets.some((b) => (b.requests || 0) > 0 || (b.prompt_tokens || 0) > 0 || (b.completion_tokens || 0) > 0)
+    ) {
+      plot.innerHTML = '<div class="chart-empty">' + esc(t("chart.empty")) + "</div>";
+      return;
+    }
+    const max = niceMax(Math.max(1, ...buckets.map((b) =>
+      (b.prompt_tokens || 0) + (b.completion_tokens || 0))));
+    [0, max / 3, (max * 2) / 3, max].forEach((tick) => {
+      const pct = (tick / max) * 100;
+      const line = document.createElement("div");
+      line.className = "gridline";
+      line.style.bottom = pct + "%";
+      plot.appendChild(line);
+      const label = document.createElement("span");
+      label.style.bottom = pct + "%";
+      label.textContent = fmt(tick);
+      yaxis.appendChild(label);
+    });
+
+    const bars = document.createElement("div");
+    bars.className = "bars";
+    const step = Math.max(1, Math.ceil(buckets.length / 8));
+    let totalIn = 0;
+    let totalOut = 0;
+    buckets.forEach((bucket, index) => {
+      const pin = bucket.prompt_tokens || 0;
+      const pout = bucket.completion_tokens || 0;
+      const total = pin + pout;
+      totalIn += pin;
+      totalOut += pout;
+      const col = document.createElement("div");
+      col.className = "bar-col";
+      col.title = t("chart.tooltip", {
+        time: bucketLabel(bucket.ts, range),
+        tokens: fmt(total),
+        requests: count(bucket.requests),
+      }) + (bucket.errors ? t("chart.errors", { n: count(bucket.errors) }) : "");
+      const stack = document.createElement("div");
+      stack.className = "bar-stack";
+      stack.style.height = total ? Math.max(0.7, (total / max) * 100) + "%" : "0%";
+      const out = document.createElement("div");
+      out.className = "bar-out";
+      out.style.height = total ? ((pout / total) * 100) + "%" : "0%";
+      const input = document.createElement("div");
+      input.className = "bar-in";
+      input.style.height = total ? ((pin / total) * 100) + "%" : "0%";
+      stack.appendChild(out);
+      stack.appendChild(input);
+      col.appendChild(stack);
+      bars.appendChild(col);
+
+      const label = document.createElement("span");
+      if (index % step === 0) label.textContent = bucketLabel(bucket.ts, range);
+      axis.appendChild(label);
+    });
+    plot.appendChild(bars);
+  }
+
+  function renderModels(data) {
+    const rows = (data && data.models) || [];
+    if (!rows.length) {
+      $("modelRows").innerHTML = '<tr><td colspan="7" class="empty">' + esc(t("empty.noRequests")) + "</td></tr>";
+      return;
+    }
+    $("modelRows").innerHTML = rows.map((model) => `
+      <tr>
+        <td class="name">${esc(model.name)}</td>
+        <td class="num">${count(model.requests)}</td>
+        <td class="num">${fmt(model.prompt_tokens)}</td>
+        <td class="num">${fmt(model.completion_tokens)}</td>
+        <td class="num">${fmtTps(model.avg_tps)}</td>
+        <td class="num faint">${fmtMs(model.avg_duration_ms)}</td>
+        <td class="num" title="${esc(costCellTitle(model))}">${esc(costCellText(model))}</td>
+      </tr>`).join("");
+  }
+
+  function renderProviders(data) {
+    const rows = (data && data.providers) || [];
+    if (!rows.length) {
+      $("providerRows").innerHTML = '<tr><td colspan="7" class="empty">' + esc(t("empty.noRequests")) + "</td></tr>";
+      return;
+    }
+    $("providerRows").innerHTML = rows.map((provider) => `
+      <tr>
+        <td class="name">${esc(provider.name)}</td>
+        <td class="num">${count(provider.requests)}</td>
+        <td class="num">${fmt(provider.prompt_tokens)}</td>
+        <td class="num">${fmt(provider.completion_tokens)}</td>
+        <td class="num">${fmtTps(provider.avg_tps)}</td>
+        <td class="num ${provider.errors ? "state-bad" : "faint"}">${count(provider.errors)}</td>
+        <td class="num" title="${esc(costCellTitle(provider))}">${esc(costCellText(provider))}</td>
+      </tr>`).join("");
+  }
+
+  function renderRequests(data) {
+    const rows = (data && data.requests) || [];
+    $("requestHint").textContent = data && data.total ? t("requests.total", { n: count(data.total) }) : "";
+    if (!rows.length) {
+      $("requestRows").innerHTML = '<tr><td colspan="11" class="empty">' + esc(t("empty.noRequestsYet")) + "</td></tr>";
+      return;
+    }
+    $("requestRows").innerHTML = rows.map((req) => {
+      const ok = req.status < 400;
+      const fmtClass = req.inbound === "anthropic"
+        ? "anthropic"
+        : req.inbound === "responses" ? "responses" : "openai";
+      return `
+      <tr${req.error ? ' title="' + esc(req.error) + '"' : ""}>
+        <td class="mono faint">${timeLabel(req.ts)}</td>
+        <td class="name">${esc(req.model)}${req.estimated ? ' <span class="tag est">' + esc(t("tag.est")) + "</span>" : ""}</td>
+        <td class="mono faint" title="${esc(req.provider)}">${esc(req.route_id || "—")}</td>
+        <td><span class="tag ${fmtClass}"><i></i>${esc(req.inbound)}</span>${req.stream ? ' <span class="tag stream">sse</span>' : ""}</td>
+        <td class="num">${fmt(req.prompt_tokens)}</td>
+        <td class="num">${fmt(req.completion_tokens)}</td>
+        <td class="num">${fmtTps(req.tokens_per_sec)}</td>
+        <td class="num faint">${fmtMs(req.ttft_ms)}</td>
+        <td class="num faint">${fmtMs(req.duration_ms)}</td>
+        <td class="num" title="${esc(req.currency || "")}">${fmtCost(req.cost)}</td>
+        <td class="num ${ok ? "state-ok" : "state-bad"}">${req.status}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderRouting(data) {
+    const container = $("routingList");
+    state.routing = data;
+    if (!data) {
+      container.innerHTML = '<div class="empty">' + esc(t("routing.unavailable")) + "</div>";
+      return;
+    }
+    const models = (data.models || []).filter(
+      (model) => model.explicit && (model.routes || []).length > 1,
+    );
+    if (!models.length) {
+      container.innerHTML = '<div class="empty">' + esc(t("routing.single")) + "</div>";
+      return;
+    }
+    container.innerHTML = models.map((model) => {
+      const suggestion = model.suggested_strategy && model.suggested_route
+        ? `<span class="route-pill">${esc(t("routing.suggested"))} ${esc(model.suggested_strategy)}</span> → <b>${esc(model.suggested_route)}</b> · ${esc(reasonText(model.suggested_reason))}`
+        : `<span class="muted">${esc(reasonText(model.suggested_reason))}</span>`;
+      const rows = (model.routes || []).map((route) => {
+        const price = route.pricing;
+        const hasPrice = price && (price.input != null || price.output != null);
+        const priceText = hasPrice
+          ? fmtPrice(price.input) + " / " + fmtPrice(price.output)
+          : "—";
+        const priceParts = [];
+        if (price) {
+          if (price.currency) priceParts.push(price.currency);
+          if (price.cache_read != null) priceParts.push(t("th.cache") + " " + fmtPrice(price.cache_read));
+          if (price.label) priceParts.push(price.label);
+        }
+        const scheduleHtml = priceParts.length
+          ? `<span class="route-sub">${esc(priceParts.join(" · "))}</span>`
+          : "";
+        const currency = price && price.currency ? price.currency : "";
+        const stats = route.stats || {};
+        const runtime = route.runtime || {};
+        const cache = stats.requests ? fmtPercent(stats.cache_hit) : "—";
+        const ttft = stats.requests && stats.avg_ttft_ms > 0 ? fmtMs(stats.avg_ttft_ms) : "—";
+        const cost = route.estimated_cost != null ? fmtCost(route.estimated_cost) : "—";
+        const statCosts = costTotals(stats);
+        const costCurrency = statCosts.length > 1
+          ? statCosts.map((item) => item.currency + " " + fmtCost(item.cost)).join("\n")
+          : route.cost_currency || currency || (stats.currency || "");
+        const costNote = route.has_pricing
+          ? ""
+          : route.estimated_cost != null
+            ? '<span class="route-sub">' + esc(t("routing.reportedAvg")) + "</span>"
+            : '<span class="route-sub">' + esc(t("routing.noPrice")) + "</span>";
+        const status = route.healthy
+          ? stats.errors
+            ? `<span class="state-bad">${esc(t("routing.error", { n: count(stats.errors) }))}</span>`
+            : '<span class="state-ok">' + esc(t("routing.ok")) + "</span>"
+          : `<span class="state-bad">${esc(t("routing.cooldown", { n: Math.ceil((runtime.open_for_ms || 0) / 1000) }))}</span>`;
+        const isSuggested = model.suggested_route === route.route_id;
+        return `
+        <tr>
+          <td>
+            <span class="name">${esc(route.route_id)}</span>${isSuggested ? ' <span class="route-pill">' + esc(t("routing.suggested")) + "</span>" : ""}
+            <span class="route-sub">${stats.requests ? esc(t("routing.requests", { n: count(stats.requests) })) : esc(t("routing.noTraffic"))}</span>
+          </td>
+          <td><span class="tag ${esc(route.format)}"><i></i>${esc(route.format)}</span></td>
+          <td class="muted">${esc(route.provider)}<span class="route-sub mono">${esc(route.upstream)}</span></td>
+          <td class="num" title="${esc(currency)}">${priceText}${scheduleHtml}</td>
+          <td class="num">${cache}</td>
+          <td class="num">${ttft}</td>
+          <td class="num" title="${esc(costCurrency)}">${cost}${costNote}</td>
+          <td class="num">${status}</td>
+        </tr>`;
+      }).join("");
+      const choiceRank = { openai: 0, responses: 1, anthropic: 2 };
+      const chosen = Object.entries(model.choices || {})
+        .filter(([, routeId]) => routeId)
+        .sort((left, right) => (choiceRank[left[0]] ?? 9) - (choiceRank[right[0]] ?? 9))
+        .map(([format, routeId]) => (format === "openai" ? "chat" : format) + " → " + routeId)
+        .join(" · ");
+      const copy = model.suggested_strategy
+        ? `<button class="btn small" data-copy-strategy="${esc(model.model)}" title="${esc(t("routing.copyTitle"))}">${esc(t("routing.copyStrategy"))}</button>`
+        : "";
+      return `<details class="route-group" open>
+        <summary>
+          <span class="route-model">${esc(model.model)}</span>
+          <span class="route-strategy">${esc(model.strategy)}</span>
+          <span class="route-suggest">${suggestion}</span>
+        </summary>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>${esc(t("th.route"))}</th><th>${esc(t("th.format"))}</th><th>${esc(t("th.provider"))} / ${esc(t("th.upstream"))}</th><th class="num">${esc(t("th.pricePerM"))}</th><th class="num">${esc(t("th.cache"))}</th><th class="num">${esc(t("th.ttft"))}</th><th class="num">${esc(t("th.estCost"))}</th><th class="num">${esc(t("th.state"))}</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div class="route-foot">
+          <span class="meta">${esc(t("routing.chosen", { routes: chosen || "—" }))}</span>
+          ${copy}
+        </div>
+      </details>`;
+    }).join("");
+  }
+
+  function renderDiscovery(data) {
+    state.discovery = data;
+    const list = $("discoverList");
+    const providers = (data && data.providers) || [];
+    if (!providers.length) {
+      list.innerHTML = '<div class="empty">' + esc(t("discover.noProviders")) + "</div>";
+      $("discoverHint").textContent = "";
+      $("syncAllBtn").hidden = true;
+      return;
+    }
+    const missingTotal = providers.reduce(
+      (sum, provider) => sum + ((provider.missing || []).length),
+      0,
+    );
+    const missingProviders = providers.filter(
+      (provider) => (provider.missing || []).length > 0,
+    ).length;
+    const failures = providers.filter((provider) => !provider.ok).length;
+    $("discoverHint").textContent = failures
+      ? t("discover.errors", { n: failures })
+      : missingTotal
+        ? t("discover.hint", { missing: missingTotal, providers: missingProviders })
+        : t("discover.allDone");
+    $("syncAllBtn").hidden = missingTotal === 0;
+    $("syncAllBtn").textContent = t("action.addAllMissing");
+
+    list.innerHTML = providers.map((provider) => {
+      const missing = provider.missing || [];
+      const configured = (provider.configured || []).length;
+      const action = !provider.ok
+        ? '<span class="state-bad">HTTP ' + esc(provider.status || "—") + "</span>"
+        : missing.length
+          ? '<button class="btn small" data-sync-provider="' + esc(provider.id) + '">' +
+            esc(t("discover.add", { n: missing.length })) + "</button>"
+          : '<span class="state-ok">' + esc(t("discover.upToDate")) + "</span>";
+      return `<div class="discover-row">
+        <div class="discover-head">
+          <span class="name">${esc(provider.id)}</span>
+          <span class="tag ${esc(provider.format)}"><i></i>${esc(provider.format)}</span>
+          <span class="discover-meta">${esc(t("discover.summary", {
+            upstream: count(provider.count),
+            configured: count(configured),
+            missing: count(missing.length),
+          }))}</span>
+          <span class="actions">${action}</span>
+        </div>
+        ${provider.ok && missing.length
+          ? '<div class="chips">' + missing.map((model) => '<span class="chip">' + esc(model) + "</span>").join("") + "</div>"
+          : ""}
+        ${!provider.ok && provider.error
+          ? '<div class="discover-error">' + esc(provider.error) + "</div>"
+          : ""}
+      </div>`;
+    }).join("");
+  }
+
+  async function fetchModels(showBusy = true) {
+    const button = $("fetchModelsBtn");
+    if (showBusy) {
+      button.disabled = true;
+      button.textContent = t("discover.fetching");
+    }
+    try {
+      const data = await api("/admin/api/upstream-models");
+      renderDiscovery(data);
+    } catch (error) {
+      $("discoverHint").textContent = error.message;
+      $("discoverList").innerHTML =
+        '<div class="discover-error">' + esc(error.message) + "</div>";
+    } finally {
+      button.disabled = false;
+      button.textContent = t("action.fetchModels");
+    }
+  }
+
+  async function syncModels(providerId) {
+    const data = state.discovery;
+    if (!data) return;
+    const selected = (data.providers || []).filter(
+      (provider) => !providerId || provider.id === providerId,
+    );
+    const missingTotal = selected.reduce(
+      (sum, provider) => sum + ((provider.missing || []).length),
+      0,
+    );
+    if (!missingTotal) return;
+    const label = providerId || t("discover.allProviders");
+    const question = providerId
+      ? t("discover.addConfirm", { n: missingTotal, provider: label })
+      : t("discover.addAllConfirm", { n: missingTotal });
+    if (!confirm(question)) return;
+
+    document.querySelectorAll("[data-sync-provider]").forEach((button) => {
+      button.disabled = true;
+    });
+    $("syncAllBtn").disabled = true;
+    try {
+      const result = await api("/admin/api/upstream-models/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(providerId ? { provider: providerId } : {}),
+      });
+      const added = (result.providers || []).reduce(
+        (sum, provider) => sum + ((provider.added || []).length),
+        0,
+      );
+      await loadConfigSummary();
+      await loadAll();
+      await fetchModels(false);
+      $("discoverHint").textContent = t("discover.synced", { n: added, provider: label });
+    } catch (error) {
+      $("discoverHint").textContent = t("discover.syncFailed") + " " + error.message;
+    } finally {
+      $("syncAllBtn").disabled = false;
+      document.querySelectorAll("[data-sync-provider]").forEach((button) => {
+        button.disabled = false;
+      });
+    }
+  }
+
+  async function loadAll() {
+    try {
+      const range = "?range=" + encodeURIComponent(state.range);
+      const [overview, series, models, providers, routing] = await Promise.all([
+        loadOverview(),
+        api("/admin/api/timeseries" + range),
+        api("/admin/api/models" + range),
+        api("/admin/api/providers" + range),
+        api("/admin/api/routing" + range).catch(() => null),
+      ]);
+      renderChart(series.buckets, state.range);
+      renderModels(models);
+      renderProviders(providers);
+      renderRouting(routing);
+      const requests = await api("/admin/api/requests?limit=40");
+      renderRequests(requests);
+      $("updated").textContent = t("footer.updated", {
+        time: timeLabel(Date.now()),
+        uptime: uptime(overview.uptime_secs),
+      });
+      setStatus(true);
+    } catch (error) {
+      if (error.message !== "unauthorized") setStatus(false, error.message);
+    }
+  }
+
+  // --- configuration summary ---------------------------------------------
+
+  function renderConfigSummary(cfg) {
+    state.config = cfg;
+    const routeCount = cfg.models.reduce(
+      (sum, model) => sum + ((model.routes && model.routes.length) || 0),
+      0,
+    );
+    $("cfgHint").textContent = t("config.hint", {
+      providers: cfg.providers.length,
+      models: cfg.models.length,
+      routes: routeCount,
+    });
+    $("adminNote").textContent = cfg.server.admin_token_set
+      ? t("config.adminSet")
+      : t("config.adminOpen");
+    $("adminNote").className = "note" + (cfg.server.admin_token_set ? "" : " warn");
+    $("configAdminNote").textContent = cfg.server.admin_token_set
+      ? t("config.editorAdminSet")
+      : t("config.editorAdminOpen");
+    $("configAdminNote").className = "note" + (cfg.server.admin_token_set ? "" : " warn");
+    $("footerCfg").textContent = cfg.server.config_path || "";
+
+    $("providersBody").innerHTML = cfg.providers.map((provider) => `
+      <tr>
+        <td class="name">${esc(provider.id)}</td>
+        <td><span class="tag ${esc(provider.format)}"><i></i>${esc(provider.format)}</span></td>
+        <td class="mono faint" title="${esc(provider.base_url)}">${esc(truncate(provider.base_url, 36))}</td>
+        <td class="mono faint">${esc(t("config.models", { n: provider.models.length }))}</td>
+        <td>${provider.has_key ? '<span class="state-ok">' + esc(t("config.keySet")) + "</span>" : '<span class="faint">' + esc(t("config.keyNone")) + "</span>"}</td>
+        <td><span class="health" data-health="${esc(provider.id)}"><i class="dot"></i><span class="health-label faint">—</span></span></td>
+      </tr>`).join("") || '<tr><td colspan="6" class="empty">' + esc(t("config.noProviders")) + "</td></tr>";
+
+    $("mappingsBody").innerHTML = cfg.models.map((model) => {
+      const routes = model.routes || [];
+      const formats = [...new Set(routes.map((route) => route.format))];
+      const priced = routes.filter((route) => route.pricing).length;
+      const strategy = model.strategy || "auto";
+      return `
+      <tr>
+        <td class="name" title="${esc((model.aliases || []).join(", "))}">${esc(model.name)}</td>
+        <td>
+          <span class="mono">${esc(strategy)}</span>
+          ${model.manual_route ? '<span class="route-sub mono">' + esc(model.manual_route) + "</span>" : ""}
+        </td>
+        <td>${formats.map((format) => `<span class="tag ${esc(format)}"><i></i>${esc(format)}</span>`).join(" ") || '<span class="faint">—</span>'}</td>
+        <td class="num" title="${esc(routes.map((route) => route.id).join(", "))}">${routes.length}</td>
+        <td class="num ${priced ? "" : "faint"}">${priced}/${routes.length}</td>
+      </tr>`;
+    }).join("") || '<tr><td colspan="5" class="empty">' + esc(t("config.noMappings")) + "</td></tr>";
+
+    $("cfgSummary").innerHTML = `
+      <div class="preview">
+        <div>
+          <h3 class="subhead">${esc(t("config.providers"))}</h3>
+          <ul>${cfg.providers.map((provider) => `
+            <li><span>${esc(provider.id)}</span><span>${esc(provider.format)} · ${provider.models.length}</span></li>
+          `).join("") || '<li><span class="faint">' + esc(t("config.noProviders")) + "</span></li>"}</ul>
+        </div>
+        <div>
+          <h3 class="subhead">${esc(t("config.modelRouting"))}</h3>
+          <ul>${cfg.models.map((model) => {
+            const routes = model.routes || [];
+            const formats = [...new Set(routes.map((route) => route.format))].join("/");
+            return `<li><span>${esc(model.name)}</span><span>${esc(model.strategy || "auto")} · ${routes.length} · ${esc(formats)}</span></li>`;
+          }).join("") || '<li><span class="faint">' + esc(t("config.noMappingsShort")) + "</span></li>"}</ul>
+        </div>
+      </div>`;
+  }
+
+  async function loadConfigSummary() {
+    const cfg = await api("/admin/api/config");
+    renderConfigSummary(cfg);
+    return cfg;
+  }
+
+  // --- config editor -----------------------------------------------------
+
+  function applyCfgStatus() {
+    const status = state.cfgStatus;
+    if (!status) return;
+    $("cfgStatus").textContent = t(status.key, status.vars);
+    $("cfgDot").className = "dot " + (status.tone === "ok" ? "ok" : status.tone === "err" ? "err" : "");
+  }
+
+  function setCfgStatus(key, tone, vars) {
+    state.cfgStatus = { key, tone, vars: vars || null };
+    applyCfgStatus();
+  }
+
+  function setDirty(dirty) {
+    state.dirty = dirty;
+    $("dirtyBadge").hidden = !dirty;
+  }
+
+  function updateGutter() {
+    const value = $("editor").value;
+    const lines = value ? value.split("\n").length : 1;
+    $("gutter").textContent = Array.from({ length: lines }, (_, index) => index + 1).join("\n");
+    $("gutter").scrollTop = $("editor").scrollTop;
+    const bytes = new Blob([value]).size;
+    const meta = t("editor.meta", { lines, bytes });
+    $("cfgFileMeta").textContent = meta;
+    $("cfgMeta").textContent = meta;
+  }
+
+  async function loadRaw(force) {
+    if (state.dirty && !force) return;
+    if (state.dirty && force && !confirm(t("config.discardConfirm"))) return;
+    try {
+      const data = await api("/admin/api/config/raw");
+      $("editor").value = data.content;
+      $("cfgPath").textContent = data.path;
+      $("footerCfg").textContent = data.path;
+      state.rawLoaded = true;
+      setDirty(false);
+      updateGutter();
+      $("restartNote").hidden = true;
+      $("tokenChangeNote").hidden = true;
+      setCfgStatus("status.loaded", "ok");
+    } catch (error) {
+      setCfgStatus("status.error", "err", { error: error.message });
+    }
+  }
+
+  async function validateConfig() {
+    const button = $("cfgValidate");
+    button.disabled = true;
+    setCfgStatus("status.checking", "");
+    try {
+      const result = await api("/admin/api/config/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: $("editor").value }),
+      });
+      if (result && result.ok) {
+        setCfgStatus("status.valid", "ok", { providers: result.providers, models: result.models });
+      } else {
+        setCfgStatus("status.invalid", "err", {
+          error: (result && result.error) || t("status.invalidFallback"),
+        });
+      }
+    } catch (error) {
+      setCfgStatus("status.error", "err", { error: error.message });
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function saveConfig() {
+    const button = $("cfgSave");
+    button.disabled = true;
+    button.textContent = t("config.saving");
+    try {
+      const result = await api("/admin/api/config", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: $("editor").value }),
+      });
+      setDirty(false);
+      setCfgStatus(result.backup ? "status.savedBackup" : "status.saved", "ok", {
+        providers: result.providers,
+        models: result.models,
+      });
+      $("restartNote").hidden = !result.restart_required;
+      if (result.restart_required) {
+        $("restartNote").textContent = t("config.restartRequired", {
+          fields: result.restart_fields.join(", "),
+        });
+      }
+      $("tokenChangeNote").hidden = !result.admin_token_changed;
+      if (result.admin_token_changed) {
+        $("tokenChangeNote").textContent = t("config.tokenChanged");
+      }
+      if (!result.admin_token_changed) {
+        await loadConfigSummary();
+        await loadAll();
+      }
+    } catch (error) {
+      setCfgStatus("status.error", "err", { error: error.message });
+    } finally {
+      button.disabled = false;
+      button.textContent = t("action.saveApply");
+    }
+  }
+
+  // --- actions -----------------------------------------------------------
+
+  async function testHealth() {
+    const button = $("healthBtn");
+    button.disabled = true;
+    button.textContent = t("config.testing");
+    try {
+      const data = await api("/admin/api/health");
+      document.querySelectorAll("[data-health]").forEach((element) => {
+        const provider = (data.providers || []).find((item) => item.id === element.dataset.health);
+        const dot = element.querySelector(".dot");
+        const label = element.querySelector(".health-label");
+        if (!provider) {
+          dot.className = "dot";
+          label.textContent = "—";
+          label.className = "health-label faint";
+          return;
+        }
+        dot.className = "dot " + (provider.ok ? "ok" : "err");
+        label.textContent = provider.ok ? provider.latency_ms + "ms" : "HTTP " + provider.status;
+        label.className = "health-label " + (provider.ok ? "state-ok" : "state-bad");
+        element.title = provider.ok
+          ? provider.id + " · " + provider.latency_ms + "ms"
+          : provider.id + " · " + (provider.error || "HTTP " + provider.status);
+      });
+    } catch (error) {
+      if (error.message !== "unauthorized") setStatus(false, error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = t("action.testUpstreams");
+    }
+  }
+
+  async function reloadOnDisk() {
+    const button = $("reloadCfgBtn");
+    button.disabled = true;
+    try {
+      const result = await api("/admin/api/reload", { method: "POST" });
+      if (result && result.ok) {
+        await loadConfigSummary();
+        await loadAll();
+      } else {
+        setStatus(false, (result && result.error) || t("config.reloadFailed"));
+      }
+    } catch (error) {
+      if (error.message !== "unauthorized") setStatus(false, error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function applyLang() {
+    document.documentElement.lang = state.lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach((element) => {
+      element.textContent = t(element.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach((element) => {
+      element.innerHTML = t(element.dataset.i18nHtml);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+      element.placeholder = t(element.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll("[data-i18n-aria]").forEach((element) => {
+      element.setAttribute("aria-label", t(element.dataset.i18nAria));
+    });
+    $("langBtn").textContent = state.lang === "zh" ? "EN" : "中文";
+    $("langBtn").title = state.lang === "zh" ? "Switch to English" : "切换到中文";
+    $("langBtn").setAttribute("aria-label", $("langBtn").title);
+    applyTheme(state.theme);
+    applyCfgStatus();
+    updateGutter();
+    if (state.config) renderConfigSummary(state.config);
+    if (state.discovery) renderDiscovery(state.discovery);
+    renderStatus();
+  }
+
+  function applyTheme(theme) {
+    state.theme = theme;
+    document.documentElement.dataset.theme = theme;
+    $("themeBtn").textContent = t(theme === "dark" ? "theme.light" : "theme.dark");
+    localStorage.setItem("gw_theme", theme);
+  }
+
+  function switchTab(name, updateHash = true) {
+    state.tab = name;
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === name);
+    });
+    $("view-overview").hidden = name !== "overview";
+    $("view-config").hidden = name !== "config";
+    if (updateHash) {
+      history.replaceState(null, "", name === "config" ? "#config" : "#overview");
+    }
+    if (name === "config" && !state.rawLoaded) {
+      loadRaw(false);
+    }
+    if (name === "overview") loadAll();
+  }
+
+  function schedule() {
+    if (state.timer) clearInterval(state.timer);
+    if (state.auto) {
+      state.timer = setInterval(() => {
+        if (document.visibilityState === "visible" && state.tab === "overview") loadAll();
+      }, 5000);
+    }
+  }
+
+  function showTokenModal() {
+    if (state.modalOpen) return;
+    state.modalOpen = true;
+    $("tokenModal").hidden = false;
+    if (state.token) $("tokenInput").value = state.token;
+    setTimeout(() => $("tokenInput").focus(), 30);
+  }
+
+  function hideTokenModal() {
+    state.modalOpen = false;
+    $("tokenModal").hidden = true;
+  }
+
+  function bind() {
+    if (state.bound) return;
+    state.bound = true;
+
+    document.querySelectorAll("[data-tab]").forEach((tab) => {
+      tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+    });
+    document.querySelectorAll("#rangeSeg button").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("#rangeSeg button").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        state.range = button.dataset.range;
+        localStorage.setItem("gw_range", state.range);
+        loadAll();
+      });
+    });
+
+    $("autoRefresh").addEventListener("change", (event) => {
+      state.auto = event.target.checked;
+      schedule();
+    });
+    $("langBtn").addEventListener("click", () => {
+      state.lang = state.lang === "zh" ? "en" : "zh";
+      localStorage.setItem("gw_lang", state.lang);
+      applyLang();
+      if (state.tab === "overview") loadAll();
+    });
+    $("themeBtn").addEventListener("click", () => {
+      applyTheme(state.theme === "dark" ? "light" : "dark");
+    });
+    $("refreshBtn").addEventListener("click", loadAll);
+    $("fetchModelsBtn").addEventListener("click", () => fetchModels());
+    $("syncAllBtn").addEventListener("click", () => syncModels(null));
+    $("healthBtn").addEventListener("click", testHealth);
+    $("reloadCfgBtn").addEventListener("click", reloadOnDisk);
+    $("cfgValidate").addEventListener("click", validateConfig);
+    $("cfgSave").addEventListener("click", saveConfig);
+    $("cfgReload").addEventListener("click", () => loadRaw(true));
+    $("cfgRefreshSummary").addEventListener("click", () => {
+      loadConfigSummary().catch((error) =>
+        setCfgStatus("status.error", "err", { error: error.message }),
+      );
+    });
+
+    $("editor").addEventListener("input", () => {
+      setDirty(true);
+      updateGutter();
+    });
+    $("editor").addEventListener("scroll", () => {
+      $("gutter").scrollTop = $("editor").scrollTop;
+    });
+    $("editor").addEventListener("keydown", (event) => {
+      if (event.key !== "Tab") return;
+      event.preventDefault();
+      const editor = event.target;
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      editor.value = editor.value.slice(0, start) + "  " + editor.value.slice(end);
+      editor.selectionStart = editor.selectionEnd = start + 2;
+      setDirty(true);
+      updateGutter();
+    });
+
+    $("tokenSave").addEventListener("click", () => {
+      state.token = $("tokenInput").value.trim();
+      localStorage.setItem("gw_admin_token", state.token);
+      hideTokenModal();
+      boot();
+    });
+    $("tokenCancel").addEventListener("click", hideTokenModal);
+    $("tokenInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") $("tokenSave").click();
+    });
+
+    document.addEventListener("click", async (event) => {
+      const syncButton = event.target.closest("[data-sync-provider]");
+      if (syncButton) {
+        syncModels(syncButton.dataset.syncProvider);
+        return;
+      }
+      const button = event.target.closest("[data-copy-strategy]");
+      if (!button) return;
+      const entry = ((state.routing && state.routing.models) || [])
+        .find((model) => model.model === button.dataset.copyStrategy);
+      if (!entry) return;
+      const ok = await copyText(strategySnippet(entry));
+      const original = button.textContent;
+      button.textContent = ok ? t("routing.copyOk") : t("routing.copyFail");
+      setTimeout(() => { button.textContent = original; }, 1200);
+    });
+
+    window.addEventListener("hashchange", () => {
+      switchTab(location.hash === "#config" ? "config" : "overview", false);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && state.tab === "config") {
+        event.preventDefault();
+        if (state.dirty) saveConfig();
+      }
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (!state.dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+  }
+
+  async function boot() {
+    applyLang();
+    await loadAll();
+    try {
+      await loadConfigSummary();
+    } catch (error) {
+      if (error.message !== "unauthorized") $("adminNote").textContent = error.message;
+    }
+    if (state.tab === "config" && !state.rawLoaded) await loadRaw(false);
+    schedule();
+  }
+
+  bind();
+  document.querySelectorAll("#rangeSeg button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.range === state.range);
+  });
+  $("tokenInput").value = state.token;
+  state.tab = location.hash === "#config" ? "config" : "overview";
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === state.tab);
+  });
+  $("view-overview").hidden = state.tab !== "overview";
+  $("view-config").hidden = state.tab !== "config";
+  boot();
+})();
+</script>
+</body>
+</html>

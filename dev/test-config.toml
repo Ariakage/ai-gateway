@@ -1,0 +1,145 @@
+[server]
+host = "127.0.0.1"
+port = 18787
+database = "test-usage.db"
+
+[routing]
+default_strategy = "auto"
+prefer_native = true
+failure_cooldown_secs = 30
+
+[[providers]]
+id = "mock-openai"
+format = "openai"
+base_url = "http://127.0.0.1:19100/v1"
+api_key = "sk-test"
+models = ["gpt-4o", "gpt-4o-mini"]
+
+[[providers]]
+id = "mock-anthropic"
+format = "anthropic"
+base_url = "http://127.0.0.1:19100/v1"
+api_key = "sk-test"
+models = ["claude-sonnet"]
+
+[[providers]]
+id = "mock-responses"
+format = "responses"
+base_url = "http://127.0.0.1:19100/v1"
+api_key = "sk-test"
+models = ["gpt-5-codex"]
+
+# Deliberately unreachable, used by smoke tests for error propagation.
+[[providers]]
+id = "broken"
+format = "openai"
+base_url = "http://127.0.0.1:19999/v1"
+api_key = "x"
+models = []
+
+[[models]]
+name = "fast"
+provider = "mock-openai"
+upstream = "gpt-4o"
+
+[[models]]
+name = "claude"
+provider = "mock-anthropic"
+upstream = "claude-sonnet"
+
+[[models]]
+name = "smart"
+provider = "mock-anthropic"
+upstream = "claude-sonnet"
+[models.params]
+max_tokens = 2048
+
+[[models]]
+name = "resp"
+provider = "mock-responses"
+upstream = "gpt-5-codex"
+
+# One model, three protocols, three price cards.
+[[models]]
+name = "multi"
+aliases = ["tri"]
+description = "Same model across chat, responses and anthropic"
+strategy = "auto"
+
+[[models.routes]]
+id = "multi-chat"
+provider = "mock-openai"
+upstream = "gpt-4o"
+priority = 10
+[models.routes.pricing]
+currency = "USD"
+input = 2.0
+output = 4.0
+cache_read = 0.4
+
+[[models.routes]]
+id = "multi-responses"
+provider = "mock-responses"
+upstream = "gpt-5-codex"
+priority = 20
+[models.routes.pricing]
+currency = "USD"
+input = 1.0
+output = 2.0
+cache_read = 0.2
+[[models.routes.pricing.schedules]]
+label = "all-day"
+start = "00:00"
+end = "24:00"
+multiplier = 1.0
+
+[[models.routes]]
+id = "multi-anth"
+provider = "mock-anthropic"
+upstream = "claude-sonnet"
+priority = 30
+[models.routes.pricing]
+currency = "USD"
+input = 3.0
+output = 6.0
+cache_read = 0.6
+
+# Cost-only routing intentionally chooses the Responses route for OpenAI input.
+[[models]]
+name = "cheap"
+strategy = "cheapest"
+aliases = ["cheapest"]
+
+[[models.routes]]
+id = "cheap-chat"
+provider = "mock-openai"
+upstream = "gpt-4o"
+priority = 10
+[models.routes.pricing]
+input = 2.0
+output = 4.0
+
+[[models.routes]]
+id = "cheap-responses"
+provider = "mock-responses"
+upstream = "gpt-5-codex"
+priority = 20
+[models.routes.pricing]
+input = 1.0
+output = 2.0
+
+# Forced route.
+[[models]]
+name = "manual"
+strategy = "manual"
+route = "manual-responses"
+
+[[models.routes]]
+id = "manual-chat"
+provider = "mock-openai"
+upstream = "gpt-4o"
+
+[[models.routes]]
+id = "manual-responses"
+provider = "mock-responses"
+upstream = "gpt-5-codex"

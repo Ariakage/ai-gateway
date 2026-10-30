@@ -1,0 +1,232 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  AI Gateway configuration
+#  Copy to config.toml and edit. ${ENV_VAR} references are expanded at startup.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[server]
+host = "127.0.0.1"
+# IPv6 literals are accepted with or without brackets, e.g. "::1".
+port = 8787
+
+# Usage database (SQLite). Relative paths are resolved next to this config file.
+database = "gateway.db"
+
+# Keep a bounded in-memory cache of Responses API turns so that
+# `previous_response_id` works when the upstream is not a Responses API.
+# Nothing is written to disk and the cache is never persisted across restarts.
+response_state = true
+# response_state_max_entries = 128
+# response_state_max_bytes = 16777216
+# response_state_max_entry_bytes = 2097152
+# Abort a streaming upstream that stalls for this many seconds. 0 disables.
+# stream_idle_timeout_secs = 120
+# Max seconds to wait for response headers on a streaming request. 0 disables.
+# stream_headers_timeout_secs = 30
+# Timeout and size cap when reading an upstream error body.
+# error_body_timeout_secs = 10
+# error_body_max_bytes = 262144
+# Generated output retained for Responses conversion; longer streams fail.
+# stream_output_max_bytes = 8388608
+# Successful non-streaming upstream responses larger than this are rejected.
+# response_body_max_bytes = 33554432
+# SSE comment heartbeat interval for idle streams (0 disables).
+# stream_heartbeat_secs = 15
+
+# Browser origins allowed to call the gateway. Empty = same-origin only.
+# Cross-origin requests are rejected unless the exact origin is listed here.
+# allowed_origins = ["http://localhost:3000"]
+# Extra Host header names (reverse proxy / public domain).
+# allowed_hosts = ["gateway.example.com"]
+
+# Persist upstream error messages in SQLite. Off by default because some
+# upstreams echo prompts or tool arguments in their error bodies.
+# store_error_details = false
+
+# Optional: require clients to send one of these keys.
+# Accepted as `Authorization: Bearer <key>` or `x-api-key: <key>`.
+# Empty list = no auth (the default for a purely local gateway).
+api_keys = []
+# api_keys = ["sk-local-1"]
+
+# Optional: protect /admin/* (the dashboard data). Leave commented for no auth.
+# The gateway refuses to bind a non-loopback host unless admin_token is set.
+# admin_token = "change-me"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Routing defaults (per-model `strategy` overrides these)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[routing]
+default_strategy = "auto"     # auto | manual | priority | round_robin | cheapest | fastest
+prefer_native = true          # auto prefers routes that speak the inbound protocol
+failure_cooldown_secs = 30
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Providers
+#  - format = "openai"    → forwards to  {base_url}/chat/completions
+#  - format = "responses" → forwards to  {base_url}/responses
+#  - format = "anthropic" → forwards to  {base_url}/messages
+#  base_url must include the version segment (e.g. /v1). If the URL has no
+#  path at all, "/v1" is appended automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[providers]]
+id = "openai"
+format = "openai"
+base_url = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY}"
+models = ["gpt-4o", "gpt-4o-mini", "o3-mini"]
+# models_url = "https://api.openai.com/v1/models"   # defaults to <base_url>/models
+# timeout_secs = 600
+# stream_usage = true          # inject stream_options.include_usage (default true)
+
+[[providers]]
+id = "anthropic"
+format = "anthropic"
+base_url = "https://api.anthropic.com/v1"
+api_key = "${ANTHROPIC_API_KEY}"
+models = ["claude-sonnet-4-5-20250929", "claude-opus-4-1-20250805"]
+
+# OpenAI Responses API provider. Use this for Responses-only models
+# (e.g. Codex models) or when you want native Responses features such as
+# built-in tools, background mode, or upstream-managed response state.
+[[providers]]
+id = "openai-responses"
+format = "responses"
+base_url = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY}"
+models = ["gpt-5-codex"]
+
+# Provider-specific headers (applies to the most recent [[providers]] block).
+# [providers.headers]
+# "HTTP-Referer" = "https://example.com"
+# "X-Title" = "My Gateway"
+
+# Any OpenAI-compatible backend works: DeepSeek, Qwen, Ollama, LM Studio,
+# OpenRouter, vLLM, one-api, new-api, ...
+[[providers]]
+id = "deepseek"
+format = "openai"
+base_url = "https://api.deepseek.com/v1"
+api_key = "${DEEPSEEK_API_KEY}"
+models = ["deepseek-chat", "deepseek-reasoner"]
+
+# Local Ollama example (no key required):
+# [[providers]]
+# id = "ollama"
+# format = "openai"
+# base_url = "http://127.0.0.1:11434/v1"
+# models = ["qwen3:8b", "llama3.3:70b"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Model mapping (optional)
+#
+#  Clients call the gateway with `name`; the request is forwarded with
+#  `upstream`. `aliases` are extra client-facing names. `params` are merged
+#  as defaults (client-supplied values win).
+#
+#  Without an entry here, any model listed in a provider's `models` array is
+#  also resolvable by its upstream name. `provider/model` always works too.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[models]]
+name = "gpt-4o"
+provider = "openai"
+upstream = "gpt-4o"
+
+[[models]]
+name = "claude"
+provider = "anthropic"
+upstream = "claude-sonnet-4-5-20250929"
+description = "Everyday Anthropic model"
+
+[[models]]
+name = "smart"
+provider = "anthropic"
+upstream = "claude-opus-4-1-20250805"
+aliases = ["best"]
+description = "Highest quality"
+[models.params]
+max_tokens = 8192
+
+[[models]]
+name = "fast"
+provider = "deepseek"
+upstream = "deepseek-chat"
+aliases = ["cheap"]
+[models.params]
+temperature = 0.3
+
+[[models]]
+name = "codex"
+provider = "openai-responses"
+upstream = "gpt-5-codex"
+description = "Responses-only Codex model"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  One client-facing model with multiple routes
+#  (providers, protocols, price cards, priority/weight)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[models]]
+name = "portable"
+aliases = ["multi"]
+strategy = "auto"             # auto | manual | priority | round_robin | cheapest | fastest
+description = "One client name, multiple upstreams and protocols"
+
+[[models.routes]]
+id = "portable-chat"
+provider = "openai"
+upstream = "gpt-4o"
+format = "openai"
+priority = 10
+[models.routes.pricing]
+currency = "USD"
+input = 2.0                   # per 1M tokens
+output = 8.0
+cache_read = 0.5
+
+[[models.routes]]
+id = "portable-responses"
+provider = "openai-responses"
+upstream = "gpt-5-codex"
+format = "responses"
+priority = 15
+[models.routes.pricing]
+currency = "USD"
+input = 2.5
+output = 10.0
+cache_read = 0.5
+
+[[models.routes]]
+id = "portable-anth"
+provider = "anthropic"
+upstream = "claude-sonnet-4-5-20250929"
+format = "anthropic"
+priority = 20
+[models.routes.pricing]
+currency = "USD"
+input = 3.0
+output = 15.0
+cache_read = 0.3
+[[models.routes.pricing.schedules]]
+label = "off-peak"
+days = ["mon", "tue", "wed", "thu", "fri"]
+start = "00:00"
+end = "08:00"
+multiplier = 0.5
+
+[[models.routes]]
+id = "portable-deepseek"
+provider = "deepseek"
+upstream = "deepseek-chat"
+priority = 30
+[models.routes.pricing]
+currency = "USD"
+input = 0.14
+output = 0.28
+cache_read = 0.014
+
+# Manual routing example:
+# strategy = "manual"
+# route = "portable-anth"

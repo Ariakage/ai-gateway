@@ -951,6 +951,10 @@ async fn handle_inference(
     }
 
     apply_nonstream_usage(&mut usage, format, &upstream_json);
+    let mut upstream_json = upstream_json;
+    if inbound != format {
+        fill_missing_nonstream_usage(&mut upstream_json, format, &usage);
+    }
 
     let mut out = match (inbound, format) {
         (ApiFormat::Openai, ApiFormat::Anthropic) => {
@@ -4347,7 +4351,7 @@ fn tap_responses_event(ev: &SseEvent, usage: &mut UsageRec) {
                 }
             }
         }
-        "response.completed" | "response.incomplete" => {
+        "response.completed" | "response.incomplete" | "response.failed" => {
             let u = &v["response"]["usage"];
             let p = u.get("input_tokens").and_then(|x| x.as_u64());
             let c = u.get("output_tokens").and_then(|x| x.as_u64());
@@ -4364,13 +4368,13 @@ fn tap_responses_event(ev: &SseEvent, usage: &mut UsageRec) {
             }
             let (cost, currency) = extract_reported_cost(u);
             usage.set_reported_cost(cost, currency);
-        }
-        "response.failed" => {
-            let message = v["response"]["error"]["message"]
-                .as_str()
-                .unwrap_or("response failed")
-                .to_string();
-            usage.set_error(502, message);
+            if typ == "response.failed" {
+                let message = v["response"]["error"]["message"]
+                    .as_str()
+                    .unwrap_or("response failed")
+                    .to_string();
+                usage.set_error(502, message);
+            }
         }
         "error" => {
             let message = v["message"]
@@ -4583,6 +4587,39 @@ fn apply_nonstream_usage(usage: &mut UsageRec, format: ApiFormat, value: &Value)
             }
         }
         None => estimate_nonstream_output(usage, format, value),
+    }
+}
+
+// Fill only absent upstream counters before cross-format translation. Anthropic
+// reports uncached input separately, while the gateway estimate is total input.
+fn fill_missing_nonstream_usage(value: &mut Value, format: ApiFormat, usage: &UsageRec) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    let entry = obj.entry("usage").or_insert_with(|| json!({}));
+    if !entry.is_object() {
+        *entry = json!({});
+    }
+    let Some(counters) = entry.as_object_mut() else {
+        return;
+    };
+    let (input_key, output_key, input) = match format {
+        ApiFormat::Openai => ("prompt_tokens", "completion_tokens", usage.prompt_tokens),
+        ApiFormat::Responses => ("input_tokens", "output_tokens", usage.prompt_tokens),
+        ApiFormat::Anthropic => (
+            "input_tokens",
+            "output_tokens",
+            usage
+                .prompt_tokens
+                .saturating_sub(usage.cached_tokens)
+                .saturating_sub(usage.cache_write_tokens),
+        ),
+    };
+    if counters.get(input_key).and_then(Value::as_u64).is_none() {
+        counters.insert(input_key.into(), json!(input));
+    }
+    if counters.get(output_key).and_then(Value::as_u64).is_none() {
+        counters.insert(output_key.into(), json!(usage.completion_tokens));
     }
 }
 
@@ -5005,6 +5042,83 @@ mod conversion_tests {
         assert!(!direct.estimated);
         assert_eq!(direct.prompt_tokens, 10);
         assert_eq!(direct.completion_tokens, 5);
+    }
+
+    #[test]
+    fn failed_responses_event_records_usage_and_error() {
+        let mut usage = test_usage();
+        tap_responses_event(
+            &SseEvent {
+                event: None,
+                data: json!({
+                    "type": "response.failed", "response": {
+                        "error": {"message": "failed"},
+                        "usage": {"input_tokens": 120, "output_tokens": 9,
+                            "input_tokens_details": {"cached_tokens": 30, "cache_write_tokens": 4},
+                            "cost": 0.25}
+                    }
+                })
+                .to_string(),
+            },
+            &mut usage,
+        );
+        assert_eq!(
+            (
+                usage.prompt_tokens,
+                usage.completion_tokens,
+                usage.cached_tokens,
+                usage.cache_write_tokens
+            ),
+            (120, 9, 30, 4)
+        );
+        assert_eq!(usage.reported_cost, Some(0.25));
+        assert_eq!(usage.status, 502);
+        assert!(!usage.estimated);
+    }
+
+    #[test]
+    fn cross_format_nonstream_fills_missing_usage_preserving_reported_values() {
+        for format in [
+            ApiFormat::Openai,
+            ApiFormat::Anthropic,
+            ApiFormat::Responses,
+        ] {
+            let (body, target) = match format {
+                ApiFormat::Openai => (
+                    json!({"choices":[{"message":{"content":"hello world"}}]}),
+                    ApiFormat::Anthropic,
+                ),
+                ApiFormat::Anthropic => (
+                    json!({"content":[{"type":"text","text":"hello world"}]}),
+                    ApiFormat::Openai,
+                ),
+                ApiFormat::Responses => (
+                    json!({"output":[{"type":"message","content":[{"type":"output_text","text":"hello world"}]}]}),
+                    ApiFormat::Openai,
+                ),
+            };
+            let mut usage = test_usage();
+            apply_nonstream_usage(&mut usage, format, &body);
+            let mut filled = body;
+            fill_missing_nonstream_usage(&mut filled, format, &usage);
+            let out = match (format, target) {
+                (ApiFormat::Openai, _) => translate::openai_to_anthropic_response(&filled, "m"),
+                (ApiFormat::Anthropic, _) => translate::anthropic_to_openai_response(&filled, "m"),
+                _ => translate::responses_to_chat_response(&filled, "m"),
+            };
+            let result = extract_usage(target, &out).unwrap();
+            assert_eq!(result.prompt, Some(usage.prompt_tokens));
+            assert_eq!(result.completion, Some(usage.completion_tokens));
+            assert!(usage.completion_tokens > 0);
+        }
+        let mut usage = test_usage();
+        let mut body = json!({"content":[{"type":"text","text":"hello"}], "usage": {"input_tokens": 10, "cache_read_input_tokens": 3, "cache_creation_input_tokens": 2, "output_tokens": 0}});
+        apply_nonstream_usage(&mut usage, ApiFormat::Anthropic, &body);
+        fill_missing_nonstream_usage(&mut body, ApiFormat::Anthropic, &usage);
+        assert_eq!(body["usage"]["input_tokens"], 10);
+        assert_eq!(body["usage"]["output_tokens"], 0);
+        assert_eq!(body["usage"]["cache_read_input_tokens"], 3);
+        assert_eq!(body["usage"]["cache_creation_input_tokens"], 2);
     }
 
     #[test]

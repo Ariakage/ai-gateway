@@ -101,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(20))
         .pool_idle_timeout(Duration::from_secs(90))
         .user_agent("ai-gateway/0.1")

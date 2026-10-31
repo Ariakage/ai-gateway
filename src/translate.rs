@@ -482,6 +482,15 @@ pub fn anthropic_to_openai_request(req: &Value, upstream_model: &str) -> Value {
                         }
                         Some("tool_result") => {
                             let id = b.get("tool_use_id").and_then(|x| x.as_str()).unwrap_or("");
+                            if let Some(content) = b.get("content").and_then(|v| v.as_array()) {
+                                for block in content {
+                                    if block.get("type").and_then(|v| v.as_str()) == Some("image") {
+                                        if let Some(image) = anthropic_image_to_openai(block) {
+                                            parts.push(image);
+                                        }
+                                    }
+                                }
+                            }
                             tool_msgs.push(json!({
                                 "role": "tool",
                                 "tool_call_id": id,
@@ -1591,6 +1600,23 @@ pub fn responses_estimate_tokens(req: &Value) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_result_images_are_forwarded_as_user_content() {
+        let request = json!({"messages":[
+            {"role":"assistant","content":[{"type":"tool_use","id":"c1","name":"screenshot","input":{}}]},
+            {"role":"user","content":[{"type":"tool_result","tool_use_id":"c1","content":[
+                {"type":"text","text":"captured"},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"YWJj"}}
+            ]}]}
+        ]});
+        let out = anthropic_to_openai_request(&request, "m");
+        assert_eq!(out["messages"][1]["content"], "captured");
+        assert_eq!(
+            out["messages"][2]["content"][0]["image_url"]["url"],
+            "data:image/png;base64,YWJj"
+        );
+    }
 
     fn refusal_response() -> Value {
         json!({

@@ -534,6 +534,9 @@ cargo test
 
 ## 已知限制
 
+- 网关不会自动跟随上游 HTTP 重定向，以避免泄露 API key 或自定义认证头。请将 `base_url` 和 `models_url` 配置为最终地址。
+- Anthropic 工具结果中的图片转到 Chat 上游时，会放在工具结果之后的 user 消息中；上游模型需要支持图片输入。
+
 - Responses 的 `retrieve` / `cancel` / background 模式未实现（`create` 和流式正常）。
 - OpenAI 托管工具（web_search、file_search、computer use、MCP）只在 Responses → Responses 透传时可用；跨格式时会被忽略。
 - OpenAI `n > 1`、`logprobs` 等少数字段在跨格式转换时会被忽略。

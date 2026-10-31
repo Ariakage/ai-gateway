@@ -438,7 +438,10 @@ impl Router {
         health.open_until = None;
         health.last_error = None;
 
-        let sample = ttft_ms.filter(|value| *value > 0).unwrap_or(duration_ms) as f64;
+        let sample = ttft_ms
+            .filter(|value| *value >= 0)
+            .map(|value| value.max(1))
+            .unwrap_or(duration_ms) as f64;
         if sample > 0.0 {
             let ewma = inner.latency.entry(key.clone()).or_insert(sample);
             *ewma = *ewma * 0.75 + sample * 0.25;

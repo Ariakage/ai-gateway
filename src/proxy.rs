@@ -278,7 +278,11 @@ impl UsageRec {
         }
 
         let duration_ms = self.started.elapsed().as_millis() as i64;
-        let keep_partial_usage = self.status == 499;
+        let keep_partial_usage = self.status == 499
+            || self.reported_prompt
+            || self.reported_completion
+            || self.output_observed
+            || self.reported_cost.is_some();
         let (prompt, completion, cached, cache_write) = if self.status >= 400 && !keep_partial_usage
         {
             (0, 0, 0, 0)
@@ -306,7 +310,7 @@ impl UsageRec {
         } else {
             None
         };
-        let (cost, currency) = if self.status < 400 || self.status == 499 {
+        let (cost, currency) = if self.status < 400 || keep_partial_usage {
             let configured = self.price.as_ref().and_then(|price| {
                 crate::config::comparable_cost(price, prompt, completion, cached, cache_write)
             });
@@ -816,6 +820,15 @@ async fn handle_inference(
     };
 
     let upstream_status = resp.status();
+    if upstream_status.is_redirection() {
+        let message = "upstream redirect refused; configure the final upstream URL";
+        usage.set_error(502, message.to_string());
+        usage.mark_finished();
+        usage.record();
+        let mut response = error_response(inbound, StatusCode::BAD_GATEWAY, message);
+        add_route_headers(&mut response, &route);
+        return response;
+    }
     if !upstream_status.is_success() {
         let (error_body_timeout, error_body_max_bytes) = {
             let cfg = state.config.read().await;
@@ -1484,9 +1497,15 @@ fn tap_openai_event(ev: &SseEvent, usage: &mut UsageRec) {
             }
             if let Some(t) = d.get("reasoning_content").and_then(|c| c.as_str()) {
                 usage.add_estimated_completion(t);
+                if !t.is_empty() {
+                    usage.mark_first();
+                }
             }
             if let Some(t) = d.get("reasoning").and_then(|c| c.as_str()) {
                 usage.add_estimated_completion(t);
+                if !t.is_empty() {
+                    usage.mark_first();
+                }
             }
             if let Some(t) = d.get("refusal").and_then(|c| c.as_str()) {
                 if !t.is_empty() {
@@ -4845,6 +4864,39 @@ mod model_list_tests {
 #[cfg(test)]
 mod conversion_tests {
     use super::*;
+
+    #[test]
+    fn reasoning_marks_first_token() {
+        let mut usage = test_usage();
+        tap_openai_event(
+            &SseEvent {
+                event: None,
+                data: json!({"choices":[{"delta":{"reasoning_content":"thinking"}}]}).to_string(),
+            },
+            &mut usage,
+        );
+        assert!(usage.first_token.is_some());
+    }
+
+    #[test]
+    fn failed_stream_retains_reported_usage_and_cost() {
+        let mut usage = test_usage();
+        usage.set_usage_full(Some(100), Some(20), None, None);
+        usage.set_reported_cost(Some(0.25), Some("USD".into()));
+        usage.set_error(502, "interrupted".into());
+        usage.mark_finished();
+        usage.record();
+        let records = usage.stats.recent(10, 0, None, None).unwrap();
+        assert_eq!(
+            (
+                records[0].status,
+                records[0].prompt_tokens,
+                records[0].completion_tokens
+            ),
+            (502, 100, 20)
+        );
+        assert_eq!(records[0].cost, Some(0.25));
+    }
 
     fn test_usage() -> UsageRec {
         test_usage_kind(true)

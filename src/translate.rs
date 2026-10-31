@@ -1589,7 +1589,14 @@ pub fn anthropic_to_responses_response(resp: &Value, alias: &str) -> Value {
 
 pub fn responses_to_anthropic_response(resp: &Value, alias: &str) -> Value {
     let chat = responses_to_chat_response(resp, alias);
-    openai_to_anthropic_response(&chat, alias)
+    let mut response = openai_to_anthropic_response(&chat, alias);
+    let cache_write = resp["usage"]["input_tokens_details"]["cache_write_tokens"]
+        .as_u64()
+        .unwrap_or(0);
+    let uncached = response["usage"]["input_tokens"].as_u64().unwrap_or(0);
+    response["usage"]["input_tokens"] = json!(uncached.saturating_sub(cache_write));
+    response["usage"]["cache_creation_input_tokens"] = json!(cache_write);
+    response
 }
 
 pub fn responses_estimate_tokens(req: &Value) -> u64 {
@@ -1605,6 +1612,21 @@ pub fn responses_estimate_tokens(req: &Value) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn responses_to_anthropic_preserves_cache_write_and_uncached_input() {
+        let response = responses_to_anthropic_response(
+            &json!({
+                "id":"resp_1", "status":"completed", "output":[],
+                "usage":{"input_tokens":170,"output_tokens":20,"input_tokens_details":{"cached_tokens":30,"cache_write_tokens":40}}
+            }),
+            "m",
+        );
+        assert_eq!(response["usage"]["input_tokens"], 100);
+        assert_eq!(response["usage"]["cache_read_input_tokens"], 30);
+        assert_eq!(response["usage"]["cache_creation_input_tokens"], 40);
+        assert_eq!(response["usage"]["output_tokens"], 20);
+    }
 
     #[test]
     fn anthropic_to_responses_preserves_cache_write_usage() {

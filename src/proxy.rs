@@ -1532,7 +1532,7 @@ fn tap_openai_event(ev: &SseEvent, usage: &mut UsageRec) {
 
 // Anthropic reports uncached input separately and may update any cumulative
 // counter in message_delta. Preserve prior counters when a field is omitted.
-fn apply_anthropic_stream_usage(usage: &mut UsageRec, u: &Value) {
+fn apply_anthropic_stream_usage(usage: &mut UsageRec, u: &Value, include_output: bool) {
     let input = u.get("input_tokens").and_then(Value::as_u64);
     let cached = u.get("cache_read_input_tokens").and_then(Value::as_u64);
     let cache_write = u.get("cache_creation_input_tokens").and_then(Value::as_u64);
@@ -1547,7 +1547,11 @@ fn apply_anthropic_stream_usage(usage: &mut UsageRec, u: &Value) {
             .saturating_add(cached.unwrap_or(usage.cached_tokens))
             .saturating_add(cache_write.unwrap_or(usage.cache_write_tokens))
     });
-    let output = u.get("output_tokens").and_then(Value::as_u64);
+    // The start counter is only a snapshot before generated content. Treating
+    // it as final prevents later output from contributing to an estimate.
+    let output = include_output
+        .then(|| u.get("output_tokens").and_then(Value::as_u64))
+        .flatten();
     usage.set_usage_full(prompt, output, cached, cache_write);
     let (cost, currency) = extract_reported_cost(u);
     usage.set_reported_cost(cost, currency);
@@ -1563,7 +1567,7 @@ fn tap_anthropic_event(ev: &SseEvent, usage: &mut UsageRec) {
         .or(ev.event.as_deref());
     match event_type {
         Some("message_start") => {
-            apply_anthropic_stream_usage(usage, &v["message"]["usage"]);
+            apply_anthropic_stream_usage(usage, &v["message"]["usage"], false);
         }
         Some("content_block_delta") => {
             let delta = &v["delta"];
@@ -1588,7 +1592,7 @@ fn tap_anthropic_event(ev: &SseEvent, usage: &mut UsageRec) {
             usage.mark_first();
         }
         Some("message_delta") => {
-            apply_anthropic_stream_usage(usage, &v["usage"]);
+            apply_anthropic_stream_usage(usage, &v["usage"], true);
         }
         _ => {}
     }
@@ -1656,7 +1660,7 @@ impl AnthToOai {
                 if let Some(id) = msg.get("id").and_then(|i| i.as_str()) {
                     self.id = id.to_string();
                 }
-                apply_anthropic_stream_usage(usage, &msg["usage"]);
+                apply_anthropic_stream_usage(usage, &msg["usage"], false);
                 if !self.role_sent {
                     self.role_sent = true;
                     out.push(self.chunk(json!({"role": "assistant", "content": ""}), None));
@@ -1756,7 +1760,7 @@ impl AnthToOai {
                 }
             }
             Some("message_delta") => {
-                apply_anthropic_stream_usage(usage, &v["usage"]);
+                apply_anthropic_stream_usage(usage, &v["usage"], true);
                 if let Some(reason) = v["delta"]["stop_reason"].as_str() {
                     self.finish =
                         Some(translate::anthropic_stop_to_openai(Some(reason)).to_string());
@@ -5177,6 +5181,57 @@ mod conversion_tests {
         );
         assert_eq!(record.cost, Some(0.25));
         assert!(!record.estimated);
+    }
+
+    #[test]
+    fn anthropic_start_output_does_not_suppress_estimates_before_final_usage() {
+        for native in [true, false] {
+            let mut usage = test_usage();
+            let mut state = AnthToOai::new("m");
+            let mut out = Vec::new();
+            let mut send = |value: Value, usage: &mut UsageRec| {
+                let event = SseEvent {
+                    event: None,
+                    data: value.to_string(),
+                };
+                if native {
+                    tap_anthropic_event(&event, usage);
+                } else {
+                    state.handle(&event, usage, &mut out);
+                }
+            };
+            send(
+                json!({"type":"message_start","message":{"usage":{"input_tokens":100,"cache_read_input_tokens":30,"cache_creation_input_tokens":40,"output_tokens":1}}}),
+                &mut usage,
+            );
+            send(
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x".repeat(350)}}),
+                &mut usage,
+            );
+            assert!(usage.completion_tokens > 1);
+            assert!(usage.estimated);
+            let estimate = usage.completion_tokens;
+            send(
+                json!({"type":"message_delta","usage":{"cache_read_input_tokens":35}}),
+                &mut usage,
+            );
+            assert_eq!(usage.completion_tokens, estimate);
+            assert!(usage.estimated);
+            assert_eq!(
+                (
+                    usage.prompt_tokens,
+                    usage.cached_tokens,
+                    usage.cache_write_tokens
+                ),
+                (175, 35, 40)
+            );
+            send(
+                json!({"type":"message_delta","usage":{"output_tokens":20}}),
+                &mut usage,
+            );
+            assert_eq!(usage.completion_tokens, 20);
+            assert!(!usage.estimated);
+        }
     }
 
     #[test]

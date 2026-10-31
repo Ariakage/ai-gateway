@@ -1340,7 +1340,7 @@ pub struct ResponseEnvelope {
     pub created_at: i64,
     pub status: String,
     pub output: Vec<Value>,
-    pub usage: Option<(u64, u64, u64)>,
+    pub usage: Option<(u64, u64, u64, u64)>,
     pub incomplete_reason: Option<String>,
     pub instructions: Option<Value>,
     pub tools: Vec<Value>,
@@ -1370,12 +1370,12 @@ impl ResponseEnvelope {
             })
             .collect();
 
-        let usage = self.usage.map(|(input, output, cached)| {
+        let usage = self.usage.map(|(input, output, cached, cache_write)| {
             json!({
                 "input_tokens": input,
                 "input_tokens_details": {
                     "cached_tokens": cached,
-                    "cache_write_tokens": 0
+                    "cache_write_tokens": cache_write
                 },
                 "output_tokens": output,
                 "output_tokens_details": {"reasoning_tokens": 0},
@@ -1498,7 +1498,7 @@ pub fn chat_to_responses_response(resp: &Value, alias: &str) -> Value {
         created_at: now_secs(),
         status: status.to_string(),
         output,
-        usage: Some((prompt, completion, cached)),
+        usage: Some((prompt, completion, cached, 0)),
         incomplete_reason,
         instructions: None,
         tools: Vec::new(),
@@ -1579,7 +1579,12 @@ pub fn anthropic_to_responses_request(req: &Value, upstream_model: &str) -> Valu
 
 pub fn anthropic_to_responses_response(resp: &Value, alias: &str) -> Value {
     let chat = anthropic_to_openai_response(resp, alias);
-    chat_to_responses_response(&chat, alias)
+    let mut response = chat_to_responses_response(&chat, alias);
+    response["usage"]["input_tokens_details"]["cache_write_tokens"] = json!(resp["usage"]
+        ["cache_creation_input_tokens"]
+        .as_u64()
+        .unwrap_or(0));
+    response
 }
 
 pub fn responses_to_anthropic_response(resp: &Value, alias: &str) -> Value {
@@ -1600,6 +1605,27 @@ pub fn responses_estimate_tokens(req: &Value) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn anthropic_to_responses_preserves_cache_write_usage() {
+        let response = anthropic_to_responses_response(
+            &json!({
+                "content": [{"type":"text","text":"hello"}],
+                "usage": {"input_tokens":100,"cache_read_input_tokens":30,"cache_creation_input_tokens":40,"output_tokens":20}
+            }),
+            "m",
+        );
+        assert_eq!(response["usage"]["input_tokens"], 170);
+        assert_eq!(
+            response["usage"]["input_tokens_details"]["cached_tokens"],
+            30
+        );
+        assert_eq!(
+            response["usage"]["input_tokens_details"]["cache_write_tokens"],
+            40
+        );
+        assert_eq!(response["usage"]["total_tokens"], 190);
+    }
 
     #[test]
     fn tool_result_images_are_forwarded_as_user_content() {

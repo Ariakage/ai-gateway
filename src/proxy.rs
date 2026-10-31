@@ -941,7 +941,7 @@ async fn handle_inference(
         }
     };
 
-    if let Err(message) = validate_success_response(kind, format, &upstream_json) {
+    if let Err(message) = apply_and_validate_nonstream(&mut usage, kind, format, &upstream_json) {
         usage.set_error(502, message.clone());
         usage.mark_finished();
         usage.record();
@@ -950,7 +950,6 @@ async fn handle_inference(
         return response;
     }
 
-    apply_nonstream_usage(&mut usage, format, &upstream_json);
     let mut upstream_json = upstream_json;
     if inbound != format {
         fill_missing_nonstream_usage(&mut upstream_json, format, &usage);
@@ -1531,6 +1530,29 @@ fn tap_openai_event(ev: &SseEvent, usage: &mut UsageRec) {
     }
 }
 
+// Anthropic reports uncached input separately and may update any cumulative
+// counter in message_delta. Preserve prior counters when a field is omitted.
+fn apply_anthropic_stream_usage(usage: &mut UsageRec, u: &Value) {
+    let input = u.get("input_tokens").and_then(Value::as_u64);
+    let cached = u.get("cache_read_input_tokens").and_then(Value::as_u64);
+    let cache_write = u.get("cache_creation_input_tokens").and_then(Value::as_u64);
+    let prior_input = usage.reported_prompt.then(|| {
+        usage
+            .prompt_tokens
+            .saturating_sub(usage.cached_tokens)
+            .saturating_sub(usage.cache_write_tokens)
+    });
+    let prompt = input.or(prior_input).map(|value| {
+        value
+            .saturating_add(cached.unwrap_or(usage.cached_tokens))
+            .saturating_add(cache_write.unwrap_or(usage.cache_write_tokens))
+    });
+    let output = u.get("output_tokens").and_then(Value::as_u64);
+    usage.set_usage_full(prompt, output, cached, cache_write);
+    let (cost, currency) = extract_reported_cost(u);
+    usage.set_reported_cost(cost, currency);
+}
+
 fn tap_anthropic_event(ev: &SseEvent, usage: &mut UsageRec) {
     let Ok(v) = serde_json::from_str::<Value>(&ev.data) else {
         return;
@@ -1541,19 +1563,7 @@ fn tap_anthropic_event(ev: &SseEvent, usage: &mut UsageRec) {
         .or(ev.event.as_deref());
     match event_type {
         Some("message_start") => {
-            let u = &v["message"]["usage"];
-            let cached = u.get("cache_read_input_tokens").and_then(|x| x.as_u64());
-            let cache_write = u
-                .get("cache_creation_input_tokens")
-                .and_then(|x| x.as_u64());
-            // Cache counters alone cannot make the total input exact.
-            let input = u
-                .get("input_tokens")
-                .and_then(|x| x.as_u64())
-                .map(|value| value + cached.unwrap_or(0) + cache_write.unwrap_or(0));
-            usage.set_usage_full(input, None, cached, cache_write);
-            let (cost, currency) = extract_reported_cost(u);
-            usage.set_reported_cost(cost, currency);
+            apply_anthropic_stream_usage(usage, &v["message"]["usage"]);
         }
         Some("content_block_delta") => {
             let delta = &v["delta"];
@@ -1578,11 +1588,7 @@ fn tap_anthropic_event(ev: &SseEvent, usage: &mut UsageRec) {
             usage.mark_first();
         }
         Some("message_delta") => {
-            let (cost, currency) = extract_reported_cost(&v["usage"]);
-            usage.set_reported_cost(cost, currency);
-            if let Some(o) = v["usage"]["output_tokens"].as_u64() {
-                usage.set_usage_full(None, Some(o), None, None);
-            }
+            apply_anthropic_stream_usage(usage, &v["usage"]);
         }
         _ => {}
     }
@@ -1650,19 +1656,7 @@ impl AnthToOai {
                 if let Some(id) = msg.get("id").and_then(|i| i.as_str()) {
                     self.id = id.to_string();
                 }
-                let u = &msg["usage"];
-                let cached = u.get("cache_read_input_tokens").and_then(|x| x.as_u64());
-                let cache_write = u
-                    .get("cache_creation_input_tokens")
-                    .and_then(|x| x.as_u64());
-                // Cache counters alone cannot make the total input exact.
-                let input = u
-                    .get("input_tokens")
-                    .and_then(|x| x.as_u64())
-                    .map(|value| value + cached.unwrap_or(0) + cache_write.unwrap_or(0));
-                usage.set_usage_full(input, None, cached, cache_write);
-                let (cost, currency) = extract_reported_cost(u);
-                usage.set_reported_cost(cost, currency);
+                apply_anthropic_stream_usage(usage, &msg["usage"]);
                 if !self.role_sent {
                     self.role_sent = true;
                     out.push(self.chunk(json!({"role": "assistant", "content": ""}), None));
@@ -1762,14 +1756,10 @@ impl AnthToOai {
                 }
             }
             Some("message_delta") => {
-                let (cost, currency) = extract_reported_cost(&v["usage"]);
-                usage.set_reported_cost(cost, currency);
+                apply_anthropic_stream_usage(usage, &v["usage"]);
                 if let Some(reason) = v["delta"]["stop_reason"].as_str() {
                     self.finish =
                         Some(translate::anthropic_stop_to_openai(Some(reason)).to_string());
-                }
-                if let Some(output) = v["usage"]["output_tokens"].as_u64() {
-                    usage.set_usage_full(None, Some(output), None, None);
                 }
             }
             Some("message_stop") => {}
@@ -2666,7 +2656,7 @@ impl ChatToResponses {
         &self,
         status: &str,
         output: Vec<Value>,
-        usage: Option<(u64, u64, u64)>,
+        usage: Option<(u64, u64, u64, u64)>,
         incomplete: Option<String>,
     ) -> Value {
         translate::ResponseEnvelope {
@@ -3223,7 +3213,7 @@ impl ChatToResponses {
         let mut response = self.envelope(
             status,
             output,
-            Some((prompt, completion, cached)),
+            Some((prompt, completion, cached, usage.cache_write_tokens)),
             incomplete,
         );
         if cache_warning {
@@ -4576,6 +4566,16 @@ fn estimate_nonstream_output(usage: &mut UsageRec, format: ApiFormat, value: &Va
     }
 }
 
+fn apply_and_validate_nonstream(
+    usage: &mut UsageRec,
+    kind: Kind,
+    format: ApiFormat,
+    value: &Value,
+) -> Result<(), String> {
+    apply_nonstream_usage(usage, format, value);
+    validate_success_response(kind, format, value)
+}
+
 fn apply_nonstream_usage(usage: &mut UsageRec, format: ApiFormat, value: &Value) {
     match extract_usage(format, value) {
         Some(info) => {
@@ -5150,6 +5150,70 @@ mod conversion_tests {
     }
 
     #[test]
+    fn failed_nonstream_responses_retains_reported_usage_and_cost() {
+        let mut usage = test_usage();
+        let response = json!({"object":"response", "status":"failed", "error":{"message":"failed"},
+            "usage":{"input_tokens":120,"output_tokens":9,"input_tokens_details":{"cached_tokens":30,"cache_write_tokens":4},"cost":0.25}});
+        assert!(apply_and_validate_nonstream(
+            &mut usage,
+            Kind::Chat,
+            ApiFormat::Responses,
+            &response
+        )
+        .is_err());
+        usage.set_error(502, "failed".into());
+        usage.mark_finished();
+        usage.record();
+        let record = usage.stats.recent(10, 0, None, None).unwrap().remove(0);
+        assert_eq!(
+            (
+                record.status,
+                record.prompt_tokens,
+                record.completion_tokens,
+                record.cached_tokens,
+                record.cache_write_tokens
+            ),
+            (502, 120, 9, 30, 4)
+        );
+        assert_eq!(record.cost, Some(0.25));
+        assert!(!record.estimated);
+    }
+
+    #[test]
+    fn anthropic_delta_updates_all_cumulative_input_counters() {
+        for native in [true, false] {
+            let mut usage = test_usage();
+            let mut state = AnthToOai::new("m");
+            let mut out = Vec::new();
+            for value in [
+                json!({"type":"message_start","message":{"usage":{"input_tokens":100,"cache_read_input_tokens":30,"cache_creation_input_tokens":40}}}),
+                json!({"type":"message_delta","usage":{"input_tokens":1000,"cache_read_input_tokens":300,"cache_creation_input_tokens":400,"output_tokens":20}}),
+                json!({"type":"message_delta","usage":{"cache_read_input_tokens":350}}),
+            ] {
+                let event = SseEvent {
+                    event: None,
+                    data: value.to_string(),
+                };
+                if native {
+                    tap_anthropic_event(&event, &mut usage);
+                } else {
+                    state.handle(&event, &mut usage, &mut out);
+                }
+            }
+            assert_eq!(
+                (
+                    usage.prompt_tokens,
+                    usage.cached_tokens,
+                    usage.cache_write_tokens,
+                    usage.completion_tokens
+                ),
+                (1750, 350, 400, 20)
+            );
+            assert!(!usage.estimated);
+        }
+    }
+
+    #[test]
     fn anthropic_stream_usage_provenance() {
         fn event(value: Value) -> SseEvent {
             SseEvent {
@@ -5658,6 +5722,7 @@ mod conversion_tests {
         usage.prompt_tokens = 1000;
         usage.completion_tokens = 20;
         usage.cached_tokens = 800;
+        usage.cache_write_tokens = 100;
         let mut conv = ChatToResponses::new("m", None);
         conv.skip_estimates();
         let mut events = Vec::new();
@@ -5674,6 +5739,10 @@ mod conversion_tests {
         assert_eq!(
             completed["response"]["usage"]["input_tokens_details"]["cached_tokens"],
             800
+        );
+        assert_eq!(
+            completed["response"]["usage"]["input_tokens_details"]["cache_write_tokens"],
+            100
         );
     }
 

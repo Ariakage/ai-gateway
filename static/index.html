@@ -652,6 +652,104 @@ footer .spacer { flex: 1; }
 .modal-box input:focus { border-color: var(--accent); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* request context viewer */
+.modal-box.wide {
+  width: min(980px, calc(100vw - 36px));
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 28px;
+}
+.context-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.context-head h2 { margin: 5px 0 6px; font-size: 23px; }
+.modal-box .context-meta {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: .02em;
+}
+.context-body {
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--rule-strong);
+  margin-top: 14px;
+  padding-top: 4px;
+}
+.context-turn { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.context-turn:last-child { border-bottom: 0; }
+.context-role {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+.context-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-height: 340px;
+  overflow: auto;
+}
+.modal-box .context-note { margin: 12px 0; color: var(--muted); font-size: 11.5px; }
+.context-params { border-top: 1px solid var(--rule-strong); padding-top: 12px; margin-top: 6px; }
+.context-params h3 {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+.context-param {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr;
+  gap: 12px;
+  padding: 5px 0;
+  border-top: 1px dotted var(--rule);
+  font-size: 11.5px;
+}
+.context-param dt { font-family: var(--mono); color: var(--accent-ink); }
+.context-param dd {
+  margin: 0;
+  font-family: var(--mono);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+details.context-raw { border-top: 1px solid var(--rule-strong); margin-top: 12px; padding-top: 10px; }
+details.context-raw summary {
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+details.context-raw pre {
+  margin: 10px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--paper-2); }
+
 @media (max-width: 1080px) {
   .ledger { grid-template-columns: repeat(3, 1fr); }
   .ledger-item:nth-child(3) { border-right: 0; }
@@ -789,7 +887,31 @@ footer .spacer { flex: 1; }
 
       <section class="block">
         <div class="block-head">
-          <div class="eyebrow"><span>06</span> <span data-i18n="section.routing">Routing</span></div>
+          <div class="eyebrow"><span>06</span> <span data-i18n="section.contexts">Request contexts</span></div>
+          <div class="meta" id="contextHint"></div>
+          <div class="actions"><button class="btn small" id="contextRefreshBtn" data-i18n="action.refresh">Refresh</button></div>
+        </div>
+        <p class="note" data-i18n="contexts.note">
+          The inbound payload of the most recent routed calls, kept in memory only.
+          Older entries are discarded automatically; nothing is written to disk.
+        </p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="th.time">Time</th><th data-i18n="th.model">Model</th><th data-i18n="th.format">Format</th>
+                <th data-i18n="th.route">Route</th><th class="num" data-i18n="contexts.turns">Turns</th>
+                <th class="num" data-i18n="contexts.size">Size</th><th class="num" data-i18n="th.status">Status</th>
+              </tr>
+            </thead>
+            <tbody id="contextRows"><tr><td colspan="7" class="empty" data-i18n="contexts.empty">No request contexts retained yet.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <div class="eyebrow"><span>07</span> <span data-i18n="section.routing">Routing</span></div>
           <div class="meta" data-i18n="meta.priceCacheLatency">price · cache · latency</div>
         </div>
         <div id="routingList"><div class="empty" data-i18n="routing.loading">Loading routing…</div></div>
@@ -797,7 +919,7 @@ footer .spacer { flex: 1; }
 
       <section class="block">
         <div class="block-head">
-          <div class="eyebrow"><span>07</span> <span data-i18n="nav.config">Configuration</span></div>
+          <div class="eyebrow"><span>08</span> <span data-i18n="nav.config">Configuration</span></div>
           <div class="meta" id="cfgHint"></div>
           <div class="actions">
             <button class="btn small" id="healthBtn" data-i18n="action.testUpstreams">Test upstreams</button>
@@ -829,7 +951,7 @@ footer .spacer { flex: 1; }
 
       <section class="block">
         <div class="block-head">
-          <div class="eyebrow"><span>08</span> <span data-i18n="section.upstreamModels">Upstream models</span></div>
+          <div class="eyebrow"><span>09</span> <span data-i18n="section.upstreamModels">Upstream models</span></div>
           <div class="meta" id="discoverHint"></div>
           <div class="actions">
             <button class="btn small" id="fetchModelsBtn" data-i18n="action.fetchModels">Fetch models</button>
@@ -905,6 +1027,28 @@ footer .spacer { flex: 1; }
   </footer>
 </div>
 
+<div class="modal" id="contextModal" hidden>
+  <div class="modal-box wide" role="dialog" aria-modal="true" aria-labelledby="contextTitle">
+    <div class="context-head">
+      <div>
+        <div class="eyebrow"><span data-i18n="contexts.eyebrow">Request context</span></div>
+        <h2 id="contextTitle">—</h2>
+        <p class="context-meta" id="contextMeta"></p>
+      </div>
+      <button class="textbtn" id="contextClose" aria-label="Close">✕</button>
+    </div>
+    <div class="context-body" id="contextBody"></div>
+    <details class="context-raw">
+      <summary data-i18n="contexts.raw">Raw request JSON</summary>
+      <pre id="contextRaw"></pre>
+    </details>
+    <div class="modal-actions">
+      <button class="btn" id="contextCopy" data-i18n="contexts.copy">Copy JSON</button>
+      <button class="btn primary" id="contextDone" data-i18n="action.close">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="tokenModal" hidden>
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="tokenTitle">
     <div class="eyebrow"><span>—</span> <span data-i18n="modal.access">Access</span></div>
@@ -939,6 +1083,9 @@ footer .spacer { flex: 1; }
     config: null,
     routing: null,
     discovery: null,
+    contexts: null,
+    contextDetail: null,
+    contextOpen: false,
     cfgStatus: null,
     status: { ok: true, text: null, key: "status.connecting" },
   };
@@ -972,6 +1119,7 @@ footer .spacer { flex: 1; }
       "section.models": "Models",
       "section.providers": "Providers",
       "section.recent": "Recent requests",
+      "section.contexts": "Request contexts",
       "section.routing": "Routing",
       "section.upstreamModels": "Upstream models",
       "hero.requests": "requests",
@@ -1045,6 +1193,31 @@ footer .spacer { flex: 1; }
       "action.addAllMissing": "Add all missing",
       "action.cancel": "Cancel",
       "action.continue": "Continue",
+      "action.close": "Close",
+      "contexts.note": "The inbound payload of the most recent routed calls, kept in memory only. Older entries are discarded automatically; nothing is written to disk.",
+      "contexts.empty": "No request contexts retained yet.",
+      "contexts.disabled": "Context capture is disabled (server.request_context_limit = 0).",
+      "contexts.hint": "{n} of {cap} retained",
+      "contexts.turns": "Turns",
+      "contexts.size": "Size",
+      "contexts.pending": "in flight",
+      "contexts.eyebrow": "Request context",
+      "contexts.raw": "Raw request JSON",
+      "contexts.copy": "Copy JSON",
+      "contexts.copyOk": "Copied",
+      "contexts.copyFail": "Copy failed",
+      "contexts.oversized": "This request was too large to retain ({bytes}).",
+      "contexts.noMessages": "No chat messages in this request.",
+      "contexts.params": "Parameters",
+      "contexts.system": "system",
+      "contexts.instructions": "instructions",
+      "role.user": "user",
+      "role.assistant": "assistant",
+      "role.system": "system",
+      "role.developer": "developer",
+      "role.tool": "tool",
+      "role.message": "message",
+      "role.item": "item",
       "config.mappings": "Mappings",
       "config.edit": "Edit",
       "config.lede": "Changes are validated, backed up, written atomically, and applied immediately. Host, port, and database changes are marked for the next restart.",
@@ -1143,6 +1316,7 @@ footer .spacer { flex: 1; }
       "section.models": "模型",
       "section.providers": "上游",
       "section.recent": "最近请求",
+      "section.contexts": "请求上下文",
       "section.routing": "路由",
       "section.upstreamModels": "上游模型",
       "hero.requests": "次请求",
@@ -1216,6 +1390,31 @@ footer .spacer { flex: 1; }
       "action.addAllMissing": "全部添加",
       "action.cancel": "取消",
       "action.continue": "继续",
+      "action.close": "关闭",
+      "contexts.note": "仅保存在内存中的最近请求入参。超出条数上限的最旧记录会自动丢弃，不会写入磁盘。",
+      "contexts.empty": "暂无请求上下文。",
+      "contexts.disabled": "未开启上下文记录（server.request_context_limit = 0）。",
+      "contexts.hint": "已保留 {n} / {cap} 条",
+      "contexts.turns": "轮次",
+      "contexts.size": "大小",
+      "contexts.pending": "进行中",
+      "contexts.eyebrow": "请求上下文",
+      "contexts.raw": "原始请求 JSON",
+      "contexts.copy": "复制 JSON",
+      "contexts.copyOk": "已复制",
+      "contexts.copyFail": "复制失败",
+      "contexts.oversized": "请求体过大，未保留（{bytes}）。",
+      "contexts.noMessages": "此请求不含对话消息。",
+      "contexts.params": "参数",
+      "contexts.system": "系统提示",
+      "contexts.instructions": "指令",
+      "role.user": "用户",
+      "role.assistant": "助手",
+      "role.system": "系统",
+      "role.developer": "开发者",
+      "role.tool": "工具",
+      "role.message": "消息",
+      "role.item": "条目",
       "config.mappings": "模型映射",
       "config.edit": "编辑",
       "config.lede": "修改会经过校验、备份、原子写入并立即生效。host、port 和 database 的变更会标记为下次重启生效。",
@@ -1694,6 +1893,193 @@ footer .spacer { flex: 1; }
     }).join("");
   }
 
+  // --- request contexts ----------------------------------------------------
+
+  function fmtBytes(value) {
+    const bytes = Number(value) || 0;
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function renderContexts(data) {
+    state.contexts = data;
+    if (!data || !data.enabled) {
+      $("contextHint").textContent = "";
+      $("contextRows").innerHTML =
+        '<tr><td colspan="7" class="empty">' + esc(t("contexts.disabled")) + "</td></tr>";
+      return;
+    }
+    $("contextHint").textContent = t("contexts.hint", {
+      n: count(data.retained || 0),
+      cap: count(data.capacity || 0),
+    });
+    const rows = data.contexts || [];
+    if (!rows.length) {
+      $("contextRows").innerHTML =
+        '<tr><td colspan="7" class="empty">' + esc(t("contexts.empty")) + "</td></tr>";
+      return;
+    }
+    $("contextRows").innerHTML = rows.map((ctx) => {
+      const pending = !ctx.settled;
+      const ok = ctx.status > 0 && ctx.status < 400;
+      const fmtClass = ctx.inbound === "anthropic"
+        ? "anthropic"
+        : ctx.inbound === "responses" ? "responses" : "openai";
+      const status = pending
+        ? '<span class="faint">' + esc(t("contexts.pending")) + "</span>"
+        : '<span class="' + (ok ? "state-ok" : "state-bad") + '">' + ctx.status + "</span>";
+      return `
+      <tr class="clickable" data-context-id="${ctx.id}" title="${esc(ctx.error || t("contexts.raw"))}">
+        <td class="mono faint">${timeLabel(ctx.ts)}</td>
+        <td class="name">${esc(ctx.model)}</td>
+        <td><span class="tag ${fmtClass}"><i></i>${esc(ctx.inbound)}</span>${ctx.stream ? ' <span class="tag stream">sse</span>' : ""}</td>
+        <td class="mono faint" title="${esc(ctx.provider)}">${esc(ctx.route_id || "—")}</td>
+        <td class="num">${count(ctx.turns)}</td>
+        <td class="num faint">${ctx.oversized ? "—" : fmtBytes(ctx.bytes)}</td>
+        <td class="num">${status}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function contentText(content) {
+    if (content == null) return "";
+    if (typeof content === "string") return content;
+    if (typeof content === "number" || typeof content === "boolean") return String(content);
+    if (Array.isArray(content)) {
+      return content.map((part) => contentText(part)).filter(Boolean).join("\n\n");
+    }
+    if (typeof content === "object") {
+      const text = content.text ?? content.input_text ?? content.output_text
+        ?? content.content ?? content.reasoning;
+      if (typeof text === "string") return text;
+      if (text != null && typeof text !== "object") return String(text);
+      return JSON.stringify(content, null, 2);
+    }
+    return String(content);
+  }
+
+  function roleLabel(role) {
+    const key = "role." + String(role || "").toLowerCase();
+    const table = MESSAGES[state.lang] || MESSAGES.en;
+    return table[key] != null || MESSAGES.en[key] != null ? t(key) : role;
+  }
+
+  function extractTurns(body) {
+    const turns = [];
+    if (!body || typeof body !== "object") return turns;
+    if (body.system != null) turns.push({ role: t("contexts.system"), content: body.system });
+    if (body.instructions != null) {
+      turns.push({ role: t("contexts.instructions"), content: body.instructions });
+    }
+    if (Array.isArray(body.messages)) {
+      body.messages.forEach((message) => {
+        const role = roleLabel((message && message.role) || "message");
+        let content = message && message.content;
+        if (content == null && message && message.tool_calls) {
+          content = { tool_calls: message.tool_calls };
+        }
+        if (content == null) content = message;
+        turns.push({ role, content });
+      });
+    }
+    if (Array.isArray(body.input)) {
+      body.input.forEach((item) => {
+        if (item == null) return;
+        if (typeof item === "string") {
+          turns.push({ role: roleLabel("user"), content: item });
+          return;
+        }
+        const role = roleLabel(item.role || item.type || "item");
+        turns.push({ role, content: item.content != null ? item.content : item });
+      });
+    } else if (typeof body.input === "string") {
+      turns.push({ role: roleLabel("user"), content: body.input });
+    }
+    return turns;
+  }
+
+  const CONTEXT_PARAM_SKIP = new Set([
+    "messages", "input", "system", "instructions", "model", "stream",
+    "previous_response_id", "store",
+  ]);
+
+  function renderContextDetail(detail) {
+    const body = detail.body;
+    $("contextTitle").textContent = (detail.model || "—") + " · " + timeLabel(detail.ts);
+    const bits = [
+      detail.endpoint,
+      detail.provider,
+      detail.route_id ? detail.route_id : null,
+      detail.upstream_model && detail.upstream_model !== detail.model
+        ? "→ " + detail.upstream_model : null,
+      detail.stream ? "sse" : null,
+      detail.settled ? String(detail.status) : t("contexts.pending"),
+      detail.settled
+        ? count(detail.prompt_tokens) + " in · " + count(detail.completion_tokens) + " out"
+        : null,
+      detail.settled ? fmtMs(detail.duration_ms) : null,
+    ].filter(Boolean);
+    $("contextMeta").textContent = bits.join(" · ");
+
+    const parts = [];
+    if (detail.error) {
+      parts.push('<p class="context-note state-bad">' + esc(detail.error) + "</p>");
+    }
+    if (!body) {
+      parts.push(
+        '<p class="context-note">'
+        + esc(t("contexts.oversized", { bytes: fmtBytes(detail.bytes) }))
+        + "</p>",
+      );
+    } else {
+      const turns = extractTurns(body);
+      if (!turns.length) {
+        parts.push('<p class="context-note">' + esc(t("contexts.noMessages")) + "</p>");
+      } else {
+        turns.forEach((turn) => {
+          parts.push(
+            '<div class="context-turn"><div class="context-role">' + esc(turn.role)
+            + '</div><pre class="context-text">' + esc(contentText(turn.content)) + "</pre></div>",
+          );
+        });
+      }
+      const params = Object.entries(body)
+        .filter(([key]) => !CONTEXT_PARAM_SKIP.has(key));
+      if (params.length) {
+        parts.push(
+          '<div class="context-params"><h3>' + esc(t("contexts.params")) + "</h3><dl>"
+          + params.map(([key, value]) =>
+            '<div class="context-param"><dt>' + esc(key) + "</dt><dd>"
+            + esc(JSON.stringify(value, null, 2)) + "</dd></div>").join("")
+          + "</dl></div>",
+        );
+      }
+    }
+    $("contextBody").innerHTML = parts.join("");
+    $("contextRaw").textContent = body ? JSON.stringify(body, null, 2) : "";
+    $("contextCopy").disabled = !body;
+    state.contextDetail = detail;
+    state.contextOpen = true;
+    $("contextModal").hidden = false;
+    $("contextBody").scrollTop = 0;
+  }
+
+  async function openContext(id) {
+    try {
+      const data = await api("/admin/api/contexts/" + encodeURIComponent(id));
+      if (data && data.context) renderContextDetail(data.context);
+    } catch (error) {
+      if (error.message !== "unauthorized") setStatus(false, error.message);
+    }
+  }
+
+  function closeContext() {
+    state.contextOpen = false;
+    state.contextDetail = null;
+    $("contextModal").hidden = true;
+  }
+
   function renderRouting(data) {
     const container = $("routingList");
     state.routing = data;
@@ -1915,17 +2301,19 @@ footer .spacer { flex: 1; }
   async function loadAll() {
     try {
       const range = "?range=" + encodeURIComponent(state.range);
-      const [overview, series, models, providers, routing] = await Promise.all([
+      const [overview, series, models, providers, routing, contexts] = await Promise.all([
         loadOverview(),
         api("/admin/api/timeseries" + range),
         api("/admin/api/models" + range),
         api("/admin/api/providers" + range),
         api("/admin/api/routing" + range).catch(() => null),
+        api("/admin/api/contexts"),
       ]);
       renderChart(series.buckets, state.range);
       renderModels(models);
       renderProviders(providers);
       renderRouting(routing);
+      renderContexts(contexts);
       const requests = await api("/admin/api/requests?limit=40");
       renderRequests(requests);
       $("updated").textContent = t("footer.updated", {
@@ -2197,6 +2585,8 @@ footer .spacer { flex: 1; }
     updateGutter();
     if (state.config) renderConfigSummary(state.config);
     if (state.discovery) renderDiscovery(state.discovery);
+    if (state.contexts) renderContexts(state.contexts);
+    if (state.contextOpen && state.contextDetail) renderContextDetail(state.contextDetail);
     renderStatus();
   }
 
@@ -2276,6 +2666,21 @@ footer .spacer { flex: 1; }
       applyTheme(state.theme === "dark" ? "light" : "dark");
     });
     $("refreshBtn").addEventListener("click", loadAll);
+    $("contextRefreshBtn").addEventListener("click", loadAll);
+    $("contextClose").addEventListener("click", closeContext);
+    $("contextDone").addEventListener("click", closeContext);
+    $("contextModal").addEventListener("click", (event) => {
+      if (event.target === $("contextModal")) closeContext();
+    });
+    $("contextCopy").addEventListener("click", async () => {
+      const body = state.contextDetail && state.contextDetail.body;
+      if (!body) return;
+      const ok = await copyText(JSON.stringify(body, null, 2));
+      const button = $("contextCopy");
+      const original = button.textContent;
+      button.textContent = ok ? t("contexts.copyOk") : t("contexts.copyFail");
+      setTimeout(() => { button.textContent = original; }, 1200);
+    });
     $("fetchModelsBtn").addEventListener("click", () => fetchModels());
     $("syncAllBtn").addEventListener("click", () => syncModels(null));
     $("healthBtn").addEventListener("click", testHealth);
@@ -2320,6 +2725,11 @@ footer .spacer { flex: 1; }
     });
 
     document.addEventListener("click", async (event) => {
+      const contextRow = event.target.closest("[data-context-id]");
+      if (contextRow) {
+        openContext(contextRow.dataset.contextId);
+        return;
+      }
       const syncButton = event.target.closest("[data-sync-provider]");
       if (syncButton) {
         syncModels(syncButton.dataset.syncProvider);
@@ -2341,6 +2751,10 @@ footer .spacer { flex: 1; }
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.contextOpen) {
+        closeContext();
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && state.tab === "config") {
         event.preventDefault();
         if (state.dirty) saveConfig();

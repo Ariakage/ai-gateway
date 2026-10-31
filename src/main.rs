@@ -1,5 +1,6 @@
 mod admin;
 mod config;
+mod context;
 mod proxy;
 mod router;
 mod sanitize;
@@ -31,6 +32,8 @@ pub struct AppState {
     pub config_path: Arc<PathBuf>,
     pub stats: Arc<stats::Stats>,
     pub responses: Arc<store::ResponseStore>,
+    /// Bounded in-memory record of recent inbound request bodies.
+    pub contexts: Arc<context::ContextStore>,
     pub router: Arc<router::Router>,
     pub client: reqwest::Client,
     pub started: std::time::Instant,
@@ -93,6 +96,10 @@ async fn main() -> anyhow::Result<()> {
         cfg.server.response_state_max_bytes.max(1),
         cfg.server.response_state_max_entry_bytes.max(1),
     );
+    let context_limits = (
+        cfg.server.request_context_limit,
+        cfg.server.request_context_max_entry_bytes.max(1),
+    );
 
     let db_path = config::resolve_data_path(&config_path, &cfg.server.database);
     let stats = Arc::new(
@@ -121,6 +128,10 @@ async fn main() -> anyhow::Result<()> {
             response_state_limits.0,
             response_state_limits.1,
             response_state_limits.2,
+        )),
+        contexts: Arc::new(context::ContextStore::new(
+            context_limits.0,
+            context_limits.1,
         )),
         router: Arc::new(router::Router::new()),
         client,
@@ -190,6 +201,8 @@ fn build_router(state: AppState) -> Router {
         .route("/admin/api/providers", get(admin::provider_stats))
         .route("/admin/api/routing", get(admin::routing))
         .route("/admin/api/requests", get(admin::requests))
+        .route("/admin/api/contexts", get(admin::contexts))
+        .route("/admin/api/contexts/{id}", get(admin::context_detail))
         .route(
             "/admin/api/config",
             get(admin::config_view).put(admin::save_config),

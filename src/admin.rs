@@ -28,6 +28,11 @@ pub struct RequestsQuery {
     pub offset: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ContextsQuery {
+    pub limit: Option<usize>,
+}
+
 fn range_bounds(range: &str) -> (i64, i64) {
     let now = now_ms();
     match range {
@@ -449,6 +454,33 @@ pub async fn requests(State(state): State<AppState>, Query(q): Query<RequestsQue
         "requests": rows,
     }))
     .into_response()
+}
+
+/// Metadata of the retained request contexts, newest first. Bodies are only
+/// returned by `context_detail` so this list stays small under polling.
+pub async fn contexts(State(state): State<AppState>, Query(q): Query<ContextsQuery>) -> Response {
+    let capacity = state.contexts.capacity();
+    let limit = q.limit.unwrap_or(capacity).clamp(0, 500);
+    Json(json!({
+        "enabled": capacity > 0,
+        "capacity": capacity,
+        "retained": state.contexts.len(),
+        "contexts": state.contexts.list(Some(limit)),
+    }))
+    .into_response()
+}
+
+pub async fn context_detail(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
+    match state.contexts.get(id) {
+        Some(context) => Json(json!({"context": context})).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "request context not found; it may have aged out of the in-memory ring"
+            })),
+        )
+            .into_response(),
+    }
 }
 
 pub async fn config_view(State(state): State<AppState>) -> Response {
@@ -983,6 +1015,10 @@ async fn apply_response_limits(state: &AppState) {
         cfg.server.response_state_max_entries.max(1),
         cfg.server.response_state_max_bytes.max(1),
         cfg.server.response_state_max_entry_bytes.max(1),
+    );
+    state.contexts.set_limits(
+        cfg.server.request_context_limit,
+        cfg.server.request_context_max_entry_bytes.max(1),
     );
 }
 

@@ -17,6 +17,7 @@ use serde_json::{json, Value};
 use chrono::Local;
 
 use crate::config::{ApiFormat, ModelPlan, PriceSnapshot, Provider, Resolved};
+use crate::context::{ContextSeed, ContextStore};
 use crate::router::{ProbeLease, Router, SelectRequest};
 use crate::stats::{RequestRecord, Stats};
 use crate::store::ResponseStore;
@@ -61,6 +62,8 @@ impl Kind {
 pub struct UsageRec {
     stats: Arc<Stats>,
     router: Arc<Router>,
+    contexts: Arc<ContextStore>,
+    context_id: Option<u64>,
     endpoint: &'static str,
     inbound: &'static str,
     output_expected: bool,
@@ -117,10 +120,14 @@ impl UsageRec {
         error_details: bool,
         stream_idle_timeout_secs: u64,
         output_max_bytes: usize,
+        contexts: Arc<ContextStore>,
+        context_id: Option<u64>,
     ) -> Self {
         Self {
             stats,
             router,
+            contexts,
+            context_id,
             endpoint,
             inbound,
             output_expected,
@@ -347,6 +354,14 @@ impl UsageRec {
             currency,
             error: self.error.clone(),
         });
+        self.contexts.finish(
+            self.context_id,
+            self.status,
+            prompt,
+            completion,
+            duration_ms,
+            self.error.clone(),
+        );
 
         self.router.record(
             &self.model,
@@ -490,6 +505,7 @@ async fn handle_inference(
     kind: Kind,
 ) -> Response {
     let started = Instant::now();
+    let body_bytes = body.len();
     let body: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(e) => {
@@ -597,6 +613,9 @@ async fn handle_inference(
     let mut store_input: Vec<Value> = Vec::new();
     let mut should_store = false;
     let mut history_tokens: Option<u64> = None;
+    // Full session content for the context viewer when the client sent only a
+    // new turn plus `previous_response_id`.
+    let mut context_items: Option<Vec<Value>> = None;
 
     if inbound == ApiFormat::Responses {
         let state_enabled = state.config.read().await.server.response_state;
@@ -662,6 +681,10 @@ async fn handle_inference(
             }
         }
 
+        if full_history.is_some() {
+            context_items = full_history.clone();
+        }
+
         if wants_store && state_enabled && store_complete {
             store_input =
                 full_history.unwrap_or_else(|| translate::responses_input_items(&inbound_body));
@@ -678,6 +701,28 @@ async fn handle_inference(
         .pricing
         .as_ref()
         .map(|pricing| pricing.snapshot_at(Local::now()));
+
+    // Retain what this call actually carried to the model. Native Responses
+    // sessions keep their history upstream, so show the expanded local copy
+    // instead of the single new turn.
+    let mut context_body = inbound_body.clone();
+    if let Some(items) = context_items {
+        context_body["input"] = json!(items);
+        if let Some(obj) = context_body.as_object_mut() {
+            obj.remove("previous_response_id");
+        }
+    }
+    let context_id = state.contexts.capture(ContextSeed {
+        endpoint: kind.endpoint(inbound).to_string(),
+        inbound: inbound.as_str().to_string(),
+        model: alias.clone(),
+        provider: provider.id.clone(),
+        route_id: route_id.clone(),
+        upstream_model: route.upstream_model.clone(),
+        stream,
+        body: context_body,
+        body_bytes,
+    });
 
     let mut usage = UsageRec::new(
         Arc::clone(&state.stats),
@@ -697,6 +742,8 @@ async fn handle_inference(
         state.config.read().await.server.store_error_details,
         state.config.read().await.server.stream_idle_timeout_secs,
         state.config.read().await.server.stream_output_max_bytes,
+        Arc::clone(&state.contexts),
+        context_id,
     );
     usage.set_probe_lease(probe_lease);
 
@@ -4963,6 +5010,8 @@ mod conversion_tests {
             false,
             120,
             1024,
+            Arc::new(ContextStore::new(0, 1024)),
+            None,
         )
     }
 

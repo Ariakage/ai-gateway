@@ -118,6 +118,15 @@ pub struct ServerConfig {
     /// Maximum size of one cached Responses turn. Oversized turns are not cached.
     #[serde(default = "default_response_state_entry_bytes")]
     pub response_state_max_entry_bytes: usize,
+    /// Keep the inbound requests of the last N routed calls in memory so the
+    /// dashboard can show what each model call actually contained. Nothing is
+    /// written to disk. 0 disables capture.
+    #[serde(default = "default_request_context_limit")]
+    pub request_context_limit: usize,
+    /// Maximum serialized size of one retained request. Larger requests are
+    /// still listed, but their body is not kept.
+    #[serde(default = "default_request_context_entry_bytes")]
+    pub request_context_max_entry_bytes: usize,
     /// Abort a streaming upstream that stops sending bytes for this many seconds.
     /// 0 disables the idle timeout.
     #[serde(default = "default_stream_idle")]
@@ -186,6 +195,14 @@ fn default_response_state_entry_bytes() -> usize {
     2 * 1024 * 1024
 }
 
+fn default_request_context_limit() -> usize {
+    20
+}
+
+fn default_request_context_entry_bytes() -> usize {
+    1024 * 1024
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -201,6 +218,8 @@ impl Default for ServerConfig {
             response_state_max_entries: default_response_state_entries(),
             response_state_max_bytes: default_response_state_bytes(),
             response_state_max_entry_bytes: default_response_state_entry_bytes(),
+            request_context_limit: default_request_context_limit(),
+            request_context_max_entry_bytes: default_request_context_entry_bytes(),
             stream_idle_timeout_secs: default_stream_idle(),
             stream_headers_timeout_secs: default_stream_headers(),
             error_body_timeout_secs: default_error_body_timeout(),

@@ -18,6 +18,12 @@ response_state = true
 # response_state_max_entries = 128
 # response_state_max_bytes = 16777216
 # response_state_max_entry_bytes = 2097152
+# Keep the inbound payload of the most recent routed calls in memory so the
+# dashboard can show the context each model actually received. Nothing is
+# written to disk. Set to 0 to disable capture.
+# request_context_limit = 20
+# Requests larger than this many serialized bytes are listed without a body.
+# request_context_max_entry_bytes = 1048576
 # Abort a streaming upstream that stalls for this many seconds. 0 disables.
 # stream_idle_timeout_secs = 120
 # Max seconds to wait for response headers on a streaming request. 0 disables.

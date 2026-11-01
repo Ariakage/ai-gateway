@@ -32,7 +32,7 @@ pub struct AppState {
     pub config_path: Arc<PathBuf>,
     pub stats: Arc<stats::Stats>,
     pub responses: Arc<store::ResponseStore>,
-    /// Bounded in-memory record of recent inbound request bodies.
+    /// Bounded in-memory record of recent outgoing request bodies.
     pub contexts: Arc<context::ContextStore>,
     pub router: Arc<router::Router>,
     pub client: reqwest::Client,

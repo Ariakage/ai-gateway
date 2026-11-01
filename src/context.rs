@@ -18,9 +18,8 @@ pub struct ContextSeed {
     pub upstream_model: String,
     pub stream: bool,
     pub body: Value,
-    /// Size of the request body as received, before JSON normalization. Used
-    /// as an upper bound so oversized payloads are not re-serialized.
-    pub body_bytes: usize,
+    /// Optional local reconstruction for native Responses sessions.
+    pub logical_body: Option<Value>,
 }
 
 /// Everything the dashboard needs to list a captured request.
@@ -44,6 +43,7 @@ pub struct ContextSummary {
     pub error: Option<String>,
     /// Number of chat turns carried by the body.
     pub turns: usize,
+    /// Combined serialized size of the outgoing JSON and reconstructed history.
     pub bytes: usize,
     /// The body exceeded the per-entry budget and was not retained.
     pub oversized: bool,
@@ -54,11 +54,13 @@ pub struct ContextDetail {
     #[serde(flatten)]
     pub meta: ContextSummary,
     pub body: Option<Value>,
+    pub logical_body: Option<Value>,
 }
 
 struct Entry {
     meta: ContextSummary,
     body: Option<Value>,
+    logical_body: Option<Value>,
 }
 
 struct Inner {
@@ -69,7 +71,7 @@ struct Inner {
     next_id: u64,
 }
 
-/// Bounded, in-memory record of the inbound payload of recent requests.
+/// Bounded, in-memory record of outgoing JSON and optional reconstructed history.
 /// Nothing is written to disk: prompts, tool arguments and attachments stay in
 /// this process only, and the oldest request is discarded once the ring is
 /// full.
@@ -95,6 +97,13 @@ impl ContextStore {
         let mut inner = self.lock();
         inner.max_entries = max_entries;
         inner.max_entry_bytes = max_entry_bytes.max(1);
+        for entry in inner.map.values_mut() {
+            if entry.meta.bytes > max_entry_bytes.max(1) {
+                entry.body = None;
+                entry.logical_body = None;
+                entry.meta.oversized = true;
+            }
+        }
         while inner.order.len() > inner.max_entries {
             let Some(old) = inner.order.pop_front() else {
                 break;
@@ -109,13 +118,9 @@ impl ContextStore {
         if inner.max_entries == 0 {
             return None;
         }
-        let bytes = if seed.body_bytes > inner.max_entry_bytes {
-            seed.body_bytes
-        } else {
-            serde_json::to_vec(&seed.body)
-                .map(|value| value.len())
-                .unwrap_or(usize::MAX)
-        };
+        let wire_bytes = serialized_len(&seed.body);
+        let logical_bytes = seed.logical_body.as_ref().map(serialized_len).unwrap_or(0);
+        let bytes = wire_bytes.saturating_add(logical_bytes);
         let turns = count_turns(&seed.body);
         let oversized = bytes > inner.max_entry_bytes;
         let id = inner.next_id;
@@ -145,6 +150,7 @@ impl ContextStore {
             Entry {
                 meta,
                 body: if oversized { None } else { Some(seed.body) },
+                logical_body: if oversized { None } else { seed.logical_body },
             },
         );
         inner.order.push_back(id);
@@ -201,6 +207,7 @@ impl ContextStore {
         inner.map.get(&id).map(|entry| ContextDetail {
             meta: entry.meta.clone(),
             body: entry.body.clone(),
+            logical_body: entry.logical_body.clone(),
         })
     }
 
@@ -217,6 +224,26 @@ impl ContextStore {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         }
+    }
+}
+
+// Count bytes without allocating another copy of potentially large requests.
+fn serialized_len(value: &Value) -> usize {
+    struct Counter(usize);
+    impl std::io::Write for Counter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0 = self.0.saturating_add(buf.len());
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter(0);
+    if serde_json::to_writer(&mut counter, value).is_err() {
+        usize::MAX
+    } else {
+        counter.0
     }
 }
 
@@ -240,7 +267,6 @@ mod tests {
     use serde_json::json;
 
     fn seed(body: Value) -> ContextSeed {
-        let body_bytes = serde_json::to_vec(&body).map(|value| value.len()).unwrap_or(0);
         ContextSeed {
             endpoint: "chat.completions".into(),
             inbound: "openai".into(),
@@ -250,16 +276,28 @@ mod tests {
             upstream_model: "u".into(),
             stream: false,
             body,
-            body_bytes,
+            logical_body: None,
         }
     }
 
     #[test]
     fn keeps_only_the_newest_entries_and_settles_them() {
         let store = ContextStore::new(2, 4096);
-        let a = store.capture(seed(json!({"messages": [{"role": "user", "content": "a"}]}))).unwrap();
-        let b = store.capture(seed(json!({"messages": [{"role": "user", "content": "b"}]}))).unwrap();
-        let c = store.capture(seed(json!({"messages": [{"role": "user", "content": "c"}]}))).unwrap();
+        let a = store
+            .capture(seed(
+                json!({"messages": [{"role": "user", "content": "a"}]}),
+            ))
+            .unwrap();
+        let b = store
+            .capture(seed(
+                json!({"messages": [{"role": "user", "content": "b"}]}),
+            ))
+            .unwrap();
+        let c = store
+            .capture(seed(
+                json!({"messages": [{"role": "user", "content": "c"}]}),
+            ))
+            .unwrap();
         assert!(store.get(a).is_none());
         assert_eq!(store.len(), 2);
         let list = store.list(None);
@@ -289,12 +327,44 @@ mod tests {
     fn oversized_bodies_keep_metadata_without_the_body() {
         let store = ContextStore::new(5, 32);
         let id = store
-            .capture(seed(json!({"messages": [{"role": "user", "content": "x".repeat(128)}]})))
+            .capture(seed(
+                json!({"messages": [{"role": "user", "content": "x".repeat(128)}]}),
+            ))
             .unwrap();
         let detail = store.get(id).unwrap();
         assert!(detail.meta.oversized);
         assert!(detail.body.is_none());
         assert!(detail.meta.bytes > 32);
+    }
+
+    #[test]
+    fn shrinking_entry_limit_purges_existing_bodies() {
+        let store = ContextStore::new(2, 4096);
+        let id = store
+            .capture(seed(json!({"messages": [{"content": "x".repeat(128)}]})))
+            .unwrap();
+        store.set_limits(2, 32);
+        let detail = store.get(id).unwrap();
+        assert!(detail.meta.oversized);
+        assert!(detail.body.is_none());
+        store.set_limits(2, 4096);
+        assert!(store.get(id).unwrap().body.is_none());
+    }
+
+    #[test]
+    fn history_shares_entry_budget_and_is_purged_on_shrink() {
+        let mut request = seed(json!({"input": "new"}));
+        request.logical_body = Some(json!({"input": ["old", "new"]}));
+        let total =
+            serialized_len(&request.body) + serialized_len(request.logical_body.as_ref().unwrap());
+        let store = ContextStore::new(2, total);
+        let id = store.capture(request).unwrap();
+        let detail = store.get(id).unwrap();
+        assert_eq!(detail.meta.bytes, total);
+        assert!(detail.body.is_some() && detail.logical_body.is_some());
+        store.set_limits(2, total - 1);
+        let detail = store.get(id).unwrap();
+        assert!(detail.meta.oversized && detail.body.is_none() && detail.logical_body.is_none());
     }
 
     #[test]

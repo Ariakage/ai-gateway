@@ -892,7 +892,7 @@ tr.clickable:hover td { background: var(--paper-2); }
           <div class="actions"><button class="btn small" id="contextRefreshBtn" data-i18n="action.refresh">Refresh</button></div>
         </div>
         <p class="note" data-i18n="contexts.note">
-          The inbound payload of the most recent routed calls, kept in memory only.
+          The outgoing JSON of the most recent routed calls, kept in memory only.
           Older entries are discarded automatically; nothing is written to disk.
         </p>
         <div style="overflow-x:auto">
@@ -1038,8 +1038,12 @@ tr.clickable:hover td { background: var(--paper-2); }
       <button class="textbtn" id="contextClose" aria-label="Close">✕</button>
     </div>
     <div class="context-body" id="contextBody"></div>
+    <details class="context-raw" id="contextHistoryDetails" hidden>
+      <summary data-i18n="contexts.history">Locally reconstructed history (not the outgoing JSON)</summary>
+      <pre id="contextHistory"></pre>
+    </details>
     <details class="context-raw">
-      <summary data-i18n="contexts.raw">Raw request JSON</summary>
+      <summary data-i18n="contexts.raw">Outgoing request JSON</summary>
       <pre id="contextRaw"></pre>
     </details>
     <div class="modal-actions">
@@ -1194,7 +1198,7 @@ tr.clickable:hover td { background: var(--paper-2); }
       "action.cancel": "Cancel",
       "action.continue": "Continue",
       "action.close": "Close",
-      "contexts.note": "The inbound payload of the most recent routed calls, kept in memory only. Older entries are discarded automatically; nothing is written to disk.",
+      "contexts.note": "The outgoing JSON of the most recent routed calls, kept in memory only. Older entries are discarded automatically; nothing is written to disk.",
       "contexts.empty": "No request contexts retained yet.",
       "contexts.disabled": "Context capture is disabled (server.request_context_limit = 0).",
       "contexts.hint": "{n} of {cap} retained",
@@ -1202,7 +1206,9 @@ tr.clickable:hover td { background: var(--paper-2); }
       "contexts.size": "Size",
       "contexts.pending": "in flight",
       "contexts.eyebrow": "Request context",
-      "contexts.raw": "Raw request JSON",
+      "contexts.raw": "Outgoing request JSON",
+      "contexts.history": "Locally reconstructed history (not the outgoing JSON)",
+      "contexts.historyUnavailable": "This request references upstream-managed history that is not available locally.",
       "contexts.copy": "Copy JSON",
       "contexts.copyOk": "Copied",
       "contexts.copyFail": "Copy failed",
@@ -1391,7 +1397,7 @@ tr.clickable:hover td { background: var(--paper-2); }
       "action.cancel": "取消",
       "action.continue": "继续",
       "action.close": "关闭",
-      "contexts.note": "仅保存在内存中的最近请求入参。超出条数上限的最旧记录会自动丢弃，不会写入磁盘。",
+      "contexts.note": "仅保存在内存中的最近上游请求 JSON。超出条数上限的最旧记录会自动丢弃，不会写入磁盘。",
       "contexts.empty": "暂无请求上下文。",
       "contexts.disabled": "未开启上下文记录（server.request_context_limit = 0）。",
       "contexts.hint": "已保留 {n} / {cap} 条",
@@ -1399,7 +1405,9 @@ tr.clickable:hover td { background: var(--paper-2); }
       "contexts.size": "大小",
       "contexts.pending": "进行中",
       "contexts.eyebrow": "请求上下文",
-      "contexts.raw": "原始请求 JSON",
+      "contexts.raw": "实际发往上游的请求 JSON",
+      "contexts.history": "本地重建的历史（并非实际发送的 JSON）",
+      "contexts.historyUnavailable": "此请求引用了上游管理的历史，本地无法获取。",
       "contexts.copy": "复制 JSON",
       "contexts.copyOk": "已复制",
       "contexts.copyFail": "复制失败",
@@ -1976,11 +1984,11 @@ tr.clickable:hover td { background: var(--paper-2); }
       body.messages.forEach((message) => {
         const role = roleLabel((message && message.role) || "message");
         let content = message && message.content;
-        if (content == null && message && message.tool_calls) {
-          content = { tool_calls: message.tool_calls };
+        if (content == null && !(message && message.tool_calls)) content = message;
+        if (content != null) turns.push({ role, content });
+        if (message && message.tool_calls) {
+          turns.push({ role: "tool_calls", content: message.tool_calls });
         }
-        if (content == null) content = message;
-        turns.push({ role, content });
       });
     }
     if (Array.isArray(body.input)) {
@@ -2033,7 +2041,13 @@ tr.clickable:hover td { background: var(--paper-2); }
         + "</p>",
       );
     } else {
-      const turns = extractTurns(body);
+      if (body.previous_response_id && !detail.logical_body) {
+        parts.push('<p class="context-note">' + esc(t("contexts.historyUnavailable")) + "</p>");
+      }
+      if (detail.logical_body) {
+        parts.push('<p class="context-note">' + esc(t("contexts.history")) + "</p>");
+      }
+      const turns = extractTurns(detail.logical_body || body);
       if (!turns.length) {
         parts.push('<p class="context-note">' + esc(t("contexts.noMessages")) + "</p>");
       } else {
@@ -2058,6 +2072,9 @@ tr.clickable:hover td { background: var(--paper-2); }
     }
     $("contextBody").innerHTML = parts.join("");
     $("contextRaw").textContent = body ? JSON.stringify(body, null, 2) : "";
+    $("contextHistoryDetails").hidden = !detail.logical_body;
+    $("contextHistoryDetails").open = false;
+    $("contextHistory").textContent = detail.logical_body ? JSON.stringify(detail.logical_body, null, 2) : "";
     $("contextCopy").disabled = !body;
     state.contextDetail = detail;
     state.contextOpen = true;

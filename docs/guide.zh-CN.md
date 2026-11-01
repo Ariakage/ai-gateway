@@ -96,9 +96,9 @@ response_state = true
 # response_state_max_entries = 128
 # response_state_max_bytes = 16777216
 # response_state_max_entry_bytes = 2097152
-# 网页端「请求上下文」保留的最近请求入参（只在内存中，默认 20 条，0 = 关闭）
+# 网页端「请求上下文」保留的最近上游请求 JSON（只在内存中，默认 20 条，0 = 关闭）
 # request_context_limit = 20
-# 单条请求超过该字节数时只保留元数据，不保留请求体
+# 单条记录的上游 JSON 与可用的本地重建历史合计超过该字节数时只保留元数据
 # request_context_max_entry_bytes = 1048576
 # 流式上游空闲超时（秒），0 = 关闭
 # stream_idle_timeout_secs = 120
@@ -551,7 +551,7 @@ cargo test
 - Responses 的 `previous_response_id` 依赖内存缓存：默认最多 128 条 / 16 MiB、保留 1 小时、重启后丢失。可用 `response_state = false` 关闭。
 - 单轮历史超过缓存上限时，响应 `metadata.gateway_cache` 会标记 `not_stored_too_large`，后续使用该 ID 会收到明确错误。
 - Native Responses 会话在同一路由下继续透传上游 ID；切换路由时才使用本地历史重放。
-- 仪表盘的「请求上下文」只保留最近 `server.request_context_limit`（默认 20）条实际发往上游的请求体，仅存于内存、重启即清空；超过 `server.request_context_max_entry_bytes`（默认 1 MiB）的请求只列元数据。设为 0 可关闭该功能。
+- 仪表盘的「请求上下文」只保留最近 `server.request_context_limit`（默认 20）条实际发往上游的请求体，仅存于内存、重启即清空；上游 JSON 和可用的本地重建历史合计超过 `server.request_context_max_entry_bytes`（默认 1 MiB）时只列元数据。原生 Responses 使用 `previous_response_id` 时，上游持有的历史不一定可在本地获取；可获取时会单独标明本地重建结果。降低单条上限会立即清除超限记录的内容。将条数设为 0 可关闭该功能。
 - 流式请求默认 30 秒内拿不到上游响应头、或 120 秒无数据即判定超时；可用 `server.stream_headers_timeout_secs` / `server.stream_idle_timeout_secs` 调整或设为 0 关闭。
 - Responses 转换需要保留完整输出时默认最多 8 MiB；超过 `server.stream_output_max_bytes` 会返回失败而不是继续增长内存。
 - 非流式成功响应默认最多 32 MiB；超过 `server.response_body_max_bytes` 会返回 502。设为 0 可关闭限制。

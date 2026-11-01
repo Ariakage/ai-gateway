@@ -505,7 +505,6 @@ async fn handle_inference(
     kind: Kind,
 ) -> Response {
     let started = Instant::now();
-    let body_bytes = body.len();
     let body: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(e) => {
@@ -702,51 +701,6 @@ async fn handle_inference(
         .as_ref()
         .map(|pricing| pricing.snapshot_at(Local::now()));
 
-    // Retain what this call actually carried to the model. Native Responses
-    // sessions keep their history upstream, so show the expanded local copy
-    // instead of the single new turn.
-    let mut context_body = inbound_body.clone();
-    if let Some(items) = context_items {
-        context_body["input"] = json!(items);
-        if let Some(obj) = context_body.as_object_mut() {
-            obj.remove("previous_response_id");
-        }
-    }
-    let context_id = state.contexts.capture(ContextSeed {
-        endpoint: kind.endpoint(inbound).to_string(),
-        inbound: inbound.as_str().to_string(),
-        model: alias.clone(),
-        provider: provider.id.clone(),
-        route_id: route_id.clone(),
-        upstream_model: route.upstream_model.clone(),
-        stream,
-        body: context_body,
-        body_bytes,
-    });
-
-    let mut usage = UsageRec::new(
-        Arc::clone(&state.stats),
-        Arc::clone(&state.router),
-        kind.endpoint(inbound),
-        inbound.as_str(),
-        kind == Kind::Chat,
-        provider.id.clone(),
-        alias.clone(),
-        route.upstream_model.clone(),
-        route_id.clone(),
-        stream,
-        prompt_estimate,
-        started,
-        price,
-        routing.failure_cooldown_secs,
-        state.config.read().await.server.store_error_details,
-        state.config.read().await.server.stream_idle_timeout_secs,
-        state.config.read().await.server.stream_output_max_bytes,
-        Arc::clone(&state.contexts),
-        context_id,
-    );
-    usage.set_probe_lease(probe_lease);
-
     let mut upstream_body = match (inbound, format) {
         (ApiFormat::Openai, ApiFormat::Anthropic) if kind == Kind::Chat => {
             translate::openai_to_anthropic_request(&inbound_body, &route.upstream_model)
@@ -792,6 +746,55 @@ async fn handle_inference(
             obj.insert("max_tokens".into(), json!(4096));
         }
     }
+
+    // Keep the actual outgoing JSON separately from a local reconstruction of
+    // native Responses history, when that reconstruction is available.
+    let context_id = if state.contexts.capacity() > 0 {
+        let logical_body = context_items.map(|items| {
+            let mut body = inbound_body.clone();
+            body["input"] = json!(items);
+            if let Some(obj) = body.as_object_mut() {
+                obj.remove("previous_response_id");
+            }
+            body
+        });
+        state.contexts.capture(ContextSeed {
+            endpoint: kind.endpoint(inbound).to_string(),
+            inbound: inbound.as_str().to_string(),
+            model: alias.clone(),
+            provider: provider.id.clone(),
+            route_id: route_id.clone(),
+            upstream_model: route.upstream_model.clone(),
+            stream,
+            body: upstream_body.clone(),
+            logical_body,
+        })
+    } else {
+        None
+    };
+
+    let mut usage = UsageRec::new(
+        Arc::clone(&state.stats),
+        Arc::clone(&state.router),
+        kind.endpoint(inbound),
+        inbound.as_str(),
+        kind == Kind::Chat,
+        provider.id.clone(),
+        alias.clone(),
+        route.upstream_model.clone(),
+        route_id.clone(),
+        stream,
+        prompt_estimate,
+        started,
+        price,
+        routing.failure_cooldown_secs,
+        state.config.read().await.server.store_error_details,
+        state.config.read().await.server.stream_idle_timeout_secs,
+        state.config.read().await.server.stream_output_max_bytes,
+        Arc::clone(&state.contexts),
+        context_id,
+    );
+    usage.set_probe_lease(probe_lease);
 
     let expected_choices = if format == ApiFormat::Openai && kind == Kind::Chat {
         upstream_body

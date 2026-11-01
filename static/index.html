@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>AI Gateway</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <style>
 /*
   Design system — "quiet editorial"
@@ -117,13 +118,8 @@ html[lang="zh-CN"] .route-strategy {
 .mark {
   width: 30px;
   height: 30px;
-  display: grid;
-  place-items: center;
-  background: var(--accent);
-  color: #fff8f2;
-  font-family: var(--serif);
-  font-size: 17px;
-  line-height: 1;
+  display: block;
+  flex: none;
 }
 .wordmark {
   display: block;
@@ -779,7 +775,7 @@ tr.clickable:hover td { background: var(--paper-2); }
 <div class="shell">
   <header class="masthead">
     <div class="brand">
-      <span class="mark">A</span>
+      <img class="mark" src="/favicon.svg" alt="" width="30" height="30" />
       <div>
         <span class="wordmark">AI Gateway</span>
         <span class="tagline" data-i18n="tagline">Local model switchboard</span>

@@ -220,6 +220,7 @@ fn build_router(state: AppState) -> Router {
 
     Router::new()
         .route("/", get(dashboard))
+        .route("/favicon.svg", get(favicon))
         .route("/healthz", get(healthz))
         .merge(inference)
         .merge(admin)
@@ -527,6 +528,13 @@ fn client_key(headers: &HeaderMap) -> Option<String> {
 
 async fn dashboard() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
+}
+
+async fn favicon() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml")],
+        include_str!("../static/ai-gateway-icon-v3.svg"),
+    )
 }
 
 async fn healthz(State(state): State<AppState>) -> Response {

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="512" height="512" viewBox="0 0 512 512"
+     role="img" aria-labelledby="gateway-title gateway-description">
+  <title id="gateway-title">AI Gateway — Folded G</title>
+  <desc id="gateway-description">A warm ivory G, cut from a hexagonal frame, with a terracotta fold marking the gateway. Set on a dark olive square.</desc>
+  <!-- App tile. The symbol uses only two filled paths: no fonts or raster assets. -->
+  <rect width="512" height="512" rx="112" fill="#23251F"/>
+  <!-- The open frame reads as both a G and an architectural threshold. -->
+  <path fill="#F5F0E6"
+        d="M256 108 384 182V226L256 152 168 203V309L256 360 344 309V282H296V238H388V334L256 410 124 334V184Z"/>
+  <!-- A single diagonal fold turns the crossbar into an entrance plane. -->
+  <path fill="#D47750" d="M252 238H388L344 282H252Z"/>
+</svg>

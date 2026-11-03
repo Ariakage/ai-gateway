@@ -596,6 +596,14 @@ th.num { text-align: right; }
   padding: 2px 6px;
 }
 .chip.configured { color: var(--faint); }
+.mapping-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mapping-head .meta { font-size: 9.5px; color: var(--faint); white-space: nowrap; }
+.mapping-head .meta.state-bad { color: var(--danger); }
+.alias-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.alias-chip { font-size: 8.5px; padding: 1px 5px; color: var(--ink-2); border-color: var(--rule); }
+.alias-chip.shadow { color: var(--accent); border-color: var(--accent); }
+.alias-chip.conflict { color: var(--danger); border-color: var(--danger); }
+.alias-none { color: var(--faint); font-size: 9px; }
 .discover-error { color: var(--danger); font-size: 10px; }
 
 /* footer */
@@ -933,13 +941,17 @@ tr.clickable:hover td { background: var(--paper-2); }
             </div>
           </div>
           <div>
-            <h3 class="subhead" data-i18n="config.mappings">Mappings</h3>
+            <div class="mapping-head">
+              <h3 class="subhead" data-i18n="config.mappings">Mappings</h3>
+              <span class="meta" id="mappingsHint"></span>
+            </div>
             <div style="overflow-x:auto">
               <table>
                 <thead><tr><th data-i18n="th.model">Model</th><th data-i18n="th.strategy">Strategy</th><th data-i18n="th.formats">Formats</th><th class="num" data-i18n="th.routes">Routes</th><th class="num" data-i18n="th.priced">Priced</th></tr></thead>
                 <tbody id="mappingsBody"><tr><td colspan="5" class="empty" data-i18n="empty.noMappings">No explicit mappings.</td></tr></tbody>
               </table>
             </div>
+            <p class="note" data-i18n="alias.legend">Aliases: normal = no conflict; orange = shadows a provider model; red = name/alias conflict.</p>
           </div>
         </div>
         <p class="note" id="adminNote"></p>
@@ -1149,6 +1161,7 @@ tr.clickable:hover td { background: var(--paper-2); }
       "meta.byTokens": "by token volume",
       "meta.priceCacheLatency": "price · cache · latency",
       "th.model": "Model",
+      "th.aliases": "Aliases",
       "th.req": "Req",
       "th.in": "In",
       "th.out": "Out",
@@ -1221,6 +1234,13 @@ tr.clickable:hover td { background: var(--paper-2); }
       "role.message": "message",
       "role.item": "item",
       "config.mappings": "Mappings",
+      "alias.none": "no aliases",
+      "alias.summary": "{n} aliases · {c} conflicts",
+      "alias.summaryOk": "{n} aliases · no conflicts",
+      "alias.conflictModel": "conflicts with {with}",
+      "alias.conflictDuplicate": "duplicate alias",
+      "alias.conflictProvider": "shadows provider model: {with}",
+      "alias.legend": "Aliases: normal = no conflict; orange = shadows a provider model; red = name/alias conflict.",
       "config.edit": "Edit",
       "config.lede": "Changes are validated, backed up, written atomically, and applied immediately. Host, port, and database changes are marked for the next restart.",
       "config.file": "File",
@@ -1348,6 +1368,7 @@ tr.clickable:hover td { background: var(--paper-2); }
       "meta.byTokens": "按 token 量",
       "meta.priceCacheLatency": "价格 · 缓存 · 延迟",
       "th.model": "模型",
+      "th.aliases": "别名",
       "th.req": "请求",
       "th.in": "输入",
       "th.out": "输出",
@@ -1420,6 +1441,13 @@ tr.clickable:hover td { background: var(--paper-2); }
       "role.message": "消息",
       "role.item": "条目",
       "config.mappings": "模型映射",
+      "alias.none": "无别名",
+      "alias.summary": "{n} 个别名 · {c} 个冲突",
+      "alias.summaryOk": "{n} 个别名 · 无冲突",
+      "alias.conflictModel": "与 {with} 冲突",
+      "alias.conflictDuplicate": "别名重复",
+      "alias.conflictProvider": "覆盖上游模型：{with}",
+      "alias.legend": "别名：普通 = 无冲突；橙色 = 覆盖上游模型；红色 = 与其他模型名/别名冲突。",
       "config.edit": "编辑",
       "config.lede": "修改会经过校验、备份、原子写入并立即生效。host、port 和 database 的变更会标记为下次重启生效。",
       "config.file": "文件",
@@ -2341,6 +2369,31 @@ tr.clickable:hover td { background: var(--paper-2); }
 
   // --- configuration summary ---------------------------------------------
 
+  function aliasChips(model) {
+    const aliases = (model.aliases || []).filter((alias) => alias && alias.trim());
+    if (!aliases.length) return `<span class="alias-none">${esc(t("alias.none"))}</span>`;
+    const conflicts = model.alias_conflicts || [];
+    return '<div class="alias-chips">' + aliases.map((alias) => {
+      const matches = conflicts.filter((item) => item.alias === alias);
+      const modelConflict = matches.find((item) => item.kind === "model");
+      const duplicate = matches.find((item) => item.kind === "duplicate");
+      const provider = matches.find((item) => item.kind === "provider");
+      let cls = "chip alias-chip";
+      let title = alias;
+      if (modelConflict) {
+        cls += " conflict";
+        title = t("alias.conflictModel", { with: (modelConflict.with || []).join(", ") });
+      } else if (duplicate) {
+        cls += " conflict";
+        title = t("alias.conflictDuplicate");
+      } else if (provider) {
+        cls += " shadow";
+        title = t("alias.conflictProvider", { with: (provider.with || []).join(", ") });
+      }
+      return `<span class="${cls}" title="${esc(title)}">${esc(alias)}</span>`;
+    }).join("") + "</div>";
+  }
+
   function renderConfigSummary(cfg) {
     state.config = cfg;
     const routeCount = cfg.models.reduce(
@@ -2352,6 +2405,18 @@ tr.clickable:hover td { background: var(--paper-2); }
       models: cfg.models.length,
       routes: routeCount,
     });
+    const aliasTotal = cfg.models.reduce(
+      (sum, model) => sum + (model.aliases || []).filter((alias) => alias && alias.trim()).length,
+      0,
+    );
+    const aliasConflictTotal = cfg.models.reduce(
+      (sum, model) => sum + ((model.alias_conflicts || []).length),
+      0,
+    );
+    $("mappingsHint").textContent = aliasConflictTotal
+      ? t("alias.summary", { n: aliasTotal, c: aliasConflictTotal })
+      : t("alias.summaryOk", { n: aliasTotal });
+    $("mappingsHint").className = "meta" + (aliasConflictTotal ? " state-bad" : "");
     $("adminNote").textContent = cfg.server.admin_token_set
       ? t("config.adminSet")
       : t("config.adminOpen");
@@ -2379,7 +2444,10 @@ tr.clickable:hover td { background: var(--paper-2); }
       const strategy = model.strategy || "auto";
       return `
       <tr>
-        <td class="name" title="${esc((model.aliases || []).join(", "))}">${esc(model.name)}</td>
+        <td class="name" title="${esc((model.aliases || []).join(", "))}">
+          <div>${esc(model.name)}</div>
+          ${aliasChips(model)}
+        </td>
         <td>
           <span class="mono">${esc(strategy)}</span>
           ${model.manual_route ? '<span class="route-sub mono">' + esc(model.manual_route) + "</span>" : ""}

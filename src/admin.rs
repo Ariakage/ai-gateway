@@ -483,6 +483,99 @@ pub async fn context_detail(State(state): State<AppState>, Path(id): Path<u64>) 
     }
 }
 
+fn normalized_alias(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
+/// Alias collisions that the resolver would otherwise hide:
+/// - `model`: another explicit model name/alias owns the same string
+/// - `duplicate`: the same alias is repeated on one model
+/// - `provider`: the alias shadows a model exposed directly by a provider
+fn alias_report(cfg: &config::Config) -> HashMap<String, Vec<Value>> {
+    let mut owners: HashMap<String, Vec<String>> = HashMap::new();
+    for model in &cfg.models {
+        owners
+            .entry(normalized_alias(&model.name))
+            .or_default()
+            .push(model.name.clone());
+        for alias in &model.aliases {
+            let key = normalized_alias(alias);
+            if !key.is_empty() {
+                owners.entry(key).or_default().push(model.name.clone());
+            }
+        }
+    }
+
+    let mut provider_models: HashMap<String, Vec<String>> = HashMap::new();
+    for provider in &cfg.providers {
+        for model in &provider.models {
+            provider_models
+                .entry(normalized_alias(model))
+                .or_default()
+                .push(provider.id.clone());
+        }
+    }
+    let explicit_names: std::collections::HashSet<String> = cfg
+        .models
+        .iter()
+        .map(|model| normalized_alias(&model.name))
+        .collect();
+
+    let mut report: HashMap<String, Vec<Value>> = HashMap::new();
+    for model in &cfg.models {
+        let mut conflicts = Vec::new();
+        let mut seen: HashMap<String, usize> = HashMap::new();
+        for alias in &model.aliases {
+            let key = normalized_alias(alias);
+            if key.is_empty() {
+                continue;
+            }
+            let count = seen.entry(key.clone()).or_insert(0);
+            *count += 1;
+            if key == normalized_alias(&model.name) {
+                continue;
+            }
+            let others: Vec<String> = owners
+                .get(&key)
+                .map(|names| {
+                    names
+                        .iter()
+                        .filter(|name| **name != model.name)
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+            if !others.is_empty() {
+                conflicts.push(json!({
+                    "alias": alias,
+                    "kind": "model",
+                    "with": others,
+                }));
+            }
+            if *count > 1 {
+                conflicts.push(json!({
+                    "alias": alias,
+                    "kind": "duplicate",
+                    "with": [model.name.clone()],
+                }));
+            }
+            if !explicit_names.contains(&key) {
+                if let Some(providers) = provider_models.get(&key) {
+                    conflicts.push(json!({
+                        "alias": alias,
+                        "kind": "provider",
+                        "with": providers,
+                    }));
+                }
+            }
+        }
+        if !conflicts.is_empty() {
+            report.insert(model.name.clone(), conflicts);
+        }
+    }
+    report
+}
+
 pub async fn config_view(State(state): State<AppState>) -> Response {
     let cfg = state.config.read().await;
 
@@ -503,6 +596,7 @@ pub async fn config_view(State(state): State<AppState>) -> Response {
         })
         .collect();
 
+    let alias_report = alias_report(&cfg);
     let models: Vec<Value> = cfg
         .models
         .iter()
@@ -533,6 +627,7 @@ pub async fn config_view(State(state): State<AppState>) -> Response {
                 "provider": m.provider,
                 "upstream": m.upstream.clone().unwrap_or_else(|| m.name.clone()),
                 "aliases": m.aliases,
+                "alias_conflicts": alias_report.get(&m.name).cloned().unwrap_or_default(),
                 "params": m.params,
                 "description": m.description,
                 "strategy": plan.as_ref().map(|p| p.strategy.clone()),
@@ -1091,6 +1186,70 @@ models = ["m"]
 
         let config = cfg("127.0.0.1", None);
         assert!(ensure_config_applicable(&config, "127.0.0.1").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod alias_report_tests {
+    use super::*;
+
+    #[test]
+    fn reports_provider_shadow() {
+        let cfg = crate::config::parse(
+            r#"
+[[providers]]
+id = "p"
+format = "openai"
+base_url = "https://example.com/v1"
+models = ["implicit"]
+[[models]]
+name = "m"
+aliases = ["implicit", "unique"]
+[[models.routes]]
+id = "m:openai"
+provider = "p"
+"#,
+        )
+        .unwrap();
+        let report = alias_report(&cfg);
+        let conflicts = report.get("m").unwrap();
+        assert!(conflicts
+            .iter()
+            .any(|c| { c["alias"] == "implicit" && c["kind"] == "provider" }));
+        assert!(!conflicts.iter().any(|c| c["alias"] == "unique"));
+    }
+
+    #[test]
+    fn reports_model_and_duplicate_collisions() {
+        let mut cfg = crate::config::parse(
+            r#"
+[[providers]]
+id = "p"
+format = "openai"
+base_url = "https://example.com/v1"
+models = ["x"]
+[[models]]
+name = "a"
+aliases = ["one"]
+[[models.routes]]
+id = "a:openai"
+provider = "p"
+[[models]]
+name = "b"
+aliases = ["two"]
+[[models.routes]]
+id = "b:openai"
+provider = "p"
+"#,
+        )
+        .unwrap();
+        cfg.models[1].aliases = vec!["one".to_string(), "one".to_string()];
+        let report = alias_report(&cfg);
+        let conflicts = report.get("b").unwrap();
+        assert!(conflicts
+            .iter()
+            .any(|c| c["kind"] == "model" && c["with"] == json!(["a"])));
+        assert!(conflicts.iter().any(|c| c["kind"] == "duplicate"));
     }
 }
 
